@@ -1,0 +1,9 @@
+dependencies {
+    implementation project(':common')
+
+    implementation "com.discord4j.stores:stores-redis:$d4j_stores_version"
+    implementation "io.projectreactor.kafka:reactor-kafka"
+
+    testImplementation "ch.qos.logback:logback-classic:$logback_version"
+    testImplementation "junit:junit:$junit_version"
+}

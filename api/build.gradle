@@ -1,0 +1,4 @@
+dependencies {
+    compile "com.discord4j.discord4j:discord4j-core:$d4j_core_version"
+    compile "com.google.code.findbugs:jsr305:$jsr305_version"
+}

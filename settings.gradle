@@ -1,0 +1,5 @@
+rootProject.name = 'connect'
+
+include 'api'
+include 'common'
+include 'kafka'
