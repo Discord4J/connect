@@ -20,14 +20,19 @@ import discord4j.gateway.json.GatewayPayload;
 import discord4j.gateway.json.Opcode;
 import discord4j.gateway.json.dispatch.Dispatch;
 import discord4j.gateway.json.dispatch.Ready;
+import discord4j.gateway.payload.PayloadReader;
+import discord4j.gateway.payload.PayloadWriter;
+import io.netty.buffer.ByteBuf;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.*;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
-import reactor.util.concurrent.WaitStrategy;
 
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 public class DownstreamGatewayClient implements GatewayClient {
 
@@ -46,11 +51,17 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     private final PayloadSink sink;
     private final PayloadSource source;
-    private final MonoProcessor<Void> closeFuture = MonoProcessor.create(WaitStrategy.parking());
+    private final ShardInfo shardInfo;
+    private final PayloadReader payloadReader;
+    private final PayloadWriter payloadWriter;
+    private final MonoProcessor<Void> closeFuture = MonoProcessor.create();
 
-    public DownstreamGatewayClient(PayloadSink sink, PayloadSource source) {
-        this.sink = sink;
-        this.source = source;
+    public DownstreamGatewayClient(ConnectGatewayOptions gatewayOptions) {
+        this.sink = gatewayOptions.getPayloadSink();
+        this.source = gatewayOptions.getPayloadSource();
+        this.shardInfo = gatewayOptions.getIdentifyOptions().getShardInfo();
+        this.payloadReader = gatewayOptions.getPayloadReader();
+        this.payloadWriter = gatewayOptions.getPayloadWriter();
         this.dispatchSink = dispatch.sink(FluxSink.OverflowStrategy.LATEST);
         this.receiverSink = receiver.sink(FluxSink.OverflowStrategy.LATEST);
         this.senderSink = sender.sink(FluxSink.OverflowStrategy.LATEST);
@@ -63,21 +74,25 @@ public class DownstreamGatewayClient implements GatewayClient {
                 if (receiverSink.isCancelled()) {
                     return Mono.error(new IllegalStateException("Sender was cancelled"));
                 }
-                receiverSink.next(payload);
+                receiverSink.next(payload.getGatewayPayload());
                 return Mono.empty();
             }).then();
 
             Mono<Void> receiverFuture = receiver.map(this::updateSequence).doOnNext(this::handlePayload).then();
 
-            Mono<Void> senderFuture = sink.send(sender)
-                .subscribeOn(Schedulers.newSingle("payload-sender"))
-                .then();
+            Mono<Void> senderFuture = sink.send(sender.map(this::toConnectPayload))
+                    .subscribeOn(Schedulers.newSingle("payload-sender"))
+                    .then();
 
             return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture)
-                .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
-                .doOnCancel(() -> close(false))
-                .then();
+                    .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
+                    .doOnCancel(() -> close(false))
+                    .then();
         });
+    }
+
+    private ConnectPayload toConnectPayload(GatewayPayload<?> gatewayPayload) {
+        return new ConnectPayload(shardInfo, new SessionInfo(getSessionId(), getSequence()), gatewayPayload);
     }
 
     private GatewayPayload<?> updateSequence(GatewayPayload<?> payload) {
@@ -100,14 +115,23 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public void close(boolean reconnect) {
-        if (reconnect) {
-            senderSink.next(new GatewayPayload<>(Opcode.RECONNECT, null, null, null));
-        } else {
-            senderSink.next(new GatewayPayload<>());
+    public boolean isConnected() {
+        // TODO add support
+        return true;
+    }
+
+    @Override
+    public Duration getResponseTime() {
+        // TODO add support
+        return Duration.ZERO;
+    }
+
+    @Override
+    public Mono<Void> close(boolean allowResume) {
+        return Mono.fromRunnable(() -> {
             senderSink.complete();
             closeFuture.onComplete();
-        }
+        });
     }
 
     @Override
@@ -121,8 +145,19 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     @Override
+    public <T> Flux<T> receiver(Function<ByteBuf, Publisher<? extends T>> mapper) {
+        // have to convert to ByteBuf since we don't directly use it at the downstream level
+        return receiver.flatMap(payloadWriter::write).flatMap(mapper);
+    }
+
+    @Override
     public FluxSink<GatewayPayload<?>> sender() {
         return senderSink;
+    }
+
+    @Override
+    public Mono<Void> sendBuffer(Publisher<ByteBuf> publisher) {
+        return Flux.from(publisher).flatMap(payloadReader::read).doOnNext(senderSink::next).then();
     }
 
     @Override
@@ -131,8 +166,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public int getLastSequence() {
+    public int getSequence() {
         return lastSequence.get();
     }
-
 }

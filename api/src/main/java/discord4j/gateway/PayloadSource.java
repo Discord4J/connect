@@ -17,7 +17,6 @@
 
 package discord4j.gateway;
 
-import discord4j.gateway.json.GatewayPayload;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -25,5 +24,5 @@ import java.util.function.Function;
 
 public interface PayloadSource {
 
-    Flux<?> receive(Function<GatewayPayload<?>, Mono<Void>> processor);
+    Flux<?> receive(Function<ConnectPayload, Mono<Void>> processor);
 }

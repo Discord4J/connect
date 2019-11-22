@@ -25,8 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import discord4j.common.jackson.PossibleModule;
 import discord4j.core.DiscordClient;
-import discord4j.core.DiscordClientBuilder;
-import discord4j.core.event.dispatch.ReadOnlyEventMapperFactory;
+import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.domain.lifecycle.*;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.ApplicationInfo;
@@ -34,8 +33,9 @@ import discord4j.core.object.entity.Message;
 import discord4j.core.object.entity.User;
 import discord4j.core.object.presence.Presence;
 import discord4j.core.object.util.Snowflake;
-import discord4j.gateway.json.GatewayPayload;
+import discord4j.store.api.readonly.ReadOnlyStoreService;
 import discord4j.store.redis.RedisStoreService;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.BeforeClass;
@@ -43,6 +43,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.kafka.sender.SenderRecord;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.function.Tuples;
@@ -57,20 +58,16 @@ public class KafkaBotTest {
     private static final Logger log = Loggers.getLogger(KafkaBotTest.class);
 
     private static String token;
-    private static Integer shardId;
-    private static Integer shardCount;
     private static String brokers;
+    private static String downstreamTopic;
+    private static String upstreamTopic;
 
     @BeforeClass
     public static void initialize() {
         token = System.getenv("token");
-        String shardIdValue = System.getenv("shardId");
-        String shardCountValue = System.getenv("shardCount");
-        if (shardIdValue != null && shardCountValue != null) {
-            shardId = Integer.valueOf(shardIdValue);
-            shardCount = Integer.valueOf(shardCountValue);
-        }
         brokers = System.getenv("brokers");
+        downstreamTopic = "inbound";
+        upstreamTopic = "outbound";
     }
 
     @Test
@@ -79,21 +76,28 @@ public class KafkaBotTest {
         Properties props = getKafkaProperties();
         ObjectMapper mapper = getObjectMapper();
 
-        String inbound = "inbound";
-        String outbound = "outbound";
+        /*
+        the UPSTREAM node publishes to downstreamTopic to send data to the DOWNSTREAM node, this is the SINK
+        the UPSTREAM node subscribes to upstreamTopic to receive data from the DOWNSTREAM node, this the SOURCE
+         */
 
-        SinkMapper<String, String> sinkMapper = getSinkMapper(mapper);
-        SourceMapper<String, String> sourceMapper = getSourceMapper(mapper);
+        KafkaPayloadSink<String, String, Integer> upReceiverSink = new KafkaPayloadSink<>(props,
+                payload -> toJson(mapper, payload)
+                        .map(json -> SenderRecord.create(
+                                new ProducerRecord<>(downstreamTopic, payload.getShardInfo().format(), json),
+                                payload.getSessionInfo().getSequence())));
+        KafkaPayloadSource<String, String> upSenderSource = new KafkaPayloadSource<>(props, upstreamTopic,
+                record -> fromJson(mapper, record.value()));
 
-        KafkaPayloadSink<String, String> upReceiverSink = new KafkaPayloadSink<>(props, inbound, sinkMapper);
-        KafkaPayloadSource<String, String> upSenderSource = new KafkaPayloadSource<>(props, outbound, sourceMapper);
+        DiscordClient upstreamClient = DiscordClient.create(token);
 
-        DiscordClient upstreamClient = new DiscordClientBuilder(token)
-            .setGatewayClientFactory(new UpstreamGatewayClientFactory(upReceiverSink, upSenderSource))
-            .setStoreService(new RedisStoreService())
-            .build();
-
-        upstreamClient.login().block();
+        upstreamClient.gateway()
+                .setStoreService(new RedisStoreService())
+                .setExtraOptions(opts -> new ConnectGatewayOptions(opts, upReceiverSink, upSenderSource))
+                .connect(UpstreamGatewayClient::new)
+                .block()
+                .onDisconnect()
+                .block();
     }
 
     @Test
@@ -102,25 +106,31 @@ public class KafkaBotTest {
         Properties props = getKafkaProperties();
         ObjectMapper mapper = getObjectMapper();
 
-        String inbound = "inbound";
-        String outbound = "outbound";
+        /*
+        the DOWNSTREAM node subscribes to downstreamTopic to receive data from the UPSTREAM node, this the SOURCE
+        the DOWNSTREAM node publishes to upstreamTopic to send data to the UPSTREAM node, this is the SINK
+         */
 
-        SinkMapper<String, String> sinkMapper = getSinkMapper(mapper);
-        SourceMapper<String, String> sourceMapper = getSourceMapper(mapper);
+        KafkaPayloadSource<String, String> downReceiverSource = new KafkaPayloadSource<>(props, downstreamTopic,
+                record -> fromJson(mapper, record.value()));
+        KafkaPayloadSink<String, String, Integer> downSenderSink = new KafkaPayloadSink<>(props,
+                payload -> toJson(mapper, payload)
+                        .map(json -> SenderRecord.create(
+                                new ProducerRecord<>(upstreamTopic, payload.getShardInfo().format(), json),
+                                payload.getSessionInfo().getSequence())));
 
-        KafkaPayloadSource<String, String> downReceiverSource = new KafkaPayloadSource<>(props, inbound, sourceMapper);
-        KafkaPayloadSink<String, String> downSenderSink = new KafkaPayloadSink<>(props, outbound, sinkMapper);
+        DiscordClient downstreamClient = DiscordClient.create(token);
 
-        DiscordClient downstreamClient = new DiscordClientBuilder(token)
-            .setGatewayClientFactory(new DownstreamGatewayClientFactory(downSenderSink, downReceiverSource))
-            .setStoreService(new RedisStoreService())
-            .setEventMapperFactory(new ReadOnlyEventMapperFactory())
-            .build();
+        GatewayDiscordClient downstreamGateway = downstreamClient.gateway()
+                .setStoreService(new ReadOnlyStoreService(new RedisStoreService()))
+                .setExtraOptions(opts -> new ConnectGatewayOptions(opts, downSenderSink, downReceiverSource))
+                .connect(DownstreamGatewayClient::new)
+                .block();
 
-        CommandListener commandListener = new CommandListener(downstreamClient);
+        CommandListener commandListener = new CommandListener(downstreamGateway);
         commandListener.configure();
 
-        LifecycleListener lifecycleListener = new LifecycleListener(downstreamClient);
+        LifecycleListener lifecycleListener = new LifecycleListener(downstreamGateway);
         lifecycleListener.configure();
 
         downstreamClient.login().block();
@@ -128,9 +138,31 @@ public class KafkaBotTest {
 
     private ObjectMapper getObjectMapper() {
         return new ObjectMapper()
-            .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
-            .registerModules(new PossibleModule(), new Jdk8Module());
+                .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
+                .registerModules(new PossibleModule(), new Jdk8Module());
+    }
+
+    private Mono<String> toJson(ObjectMapper mapper, ConnectPayload payload) {
+        return Mono.fromCallable(() -> {
+            try {
+                return mapper.writeValueAsString(payload);
+            } catch (JsonProcessingException e) {
+                log.warn("Unable to serialize {}: {}", payload, e);
+                return null;
+            }
+        });
+    }
+
+    private Mono<ConnectPayload> fromJson(ObjectMapper mapper, String value) {
+        return Mono.fromCallable(() -> {
+            try {
+                return mapper.readValue(value, ConnectPayload.class);
+            } catch (IOException e) {
+                log.warn("Unable to deserialize {}: {}", value, e);
+                return null;
+            }
+        });
     }
 
     private Properties getKafkaProperties() {
@@ -149,80 +181,56 @@ public class KafkaBotTest {
         return props;
     }
 
-    private SinkMapper<String, String> getSinkMapper(ObjectMapper mapper) {
-        String key = shardId + ":" + shardCount;
-        return payload -> {
-            try {
-                return Tuples.of(key, mapper.writeValueAsString(payload));
-            } catch (JsonProcessingException e) {
-                log.warn("Unable to serialize {}: {}", payload, e);
-                return Tuples.of(key, "");
-            }
-        };
-    }
-
-    private SourceMapper<String, String> getSourceMapper(ObjectMapper mapper) {
-        return tuple -> {
-            try {
-                GatewayPayload<?> payload = mapper.readValue(tuple.getT2(), GatewayPayload.class);
-                return Mono.just(payload);
-            } catch (IOException e) {
-                log.warn("Unable to deserialize {}: {}", tuple.getT2(), e);
-                return Mono.empty();
-            }
-        };
-    }
-
     public static class CommandListener {
 
-        private final DiscordClient client;
+        private final GatewayDiscordClient client;
         private final AtomicLong ownerId = new AtomicLong();
 
-        public CommandListener(DiscordClient client) {
+        public CommandListener(GatewayDiscordClient client) {
             this.client = client;
         }
 
         void configure() {
             Mono<Long> getOwnerId = Mono.justOrEmpty(Optional.of(ownerId.get()).filter(id -> id != 0))
-                .switchIfEmpty(client.getApplicationInfo()
-                    .map(ApplicationInfo::getOwnerId)
-                    .map(Snowflake::asLong));
+                    .switchIfEmpty(client.getApplicationInfo()
+                            .map(ApplicationInfo::getOwnerId)
+                            .map(Snowflake::asLong));
 
             Flux.combineLatest(client.getEventDispatcher().on(MessageCreateEvent.class), getOwnerId, Tuples::of)
-                .flatMap(tuple -> {
-                    Message message = tuple.getT1().getMessage();
-                    ownerId.set(tuple.getT2());
+                    .flatMap(tuple -> {
+                        Message message = tuple.getT1().getMessage();
+                        ownerId.set(tuple.getT2());
 
-                    message.getAuthorId()
-                        .filter(id -> tuple.getT2() == id.asLong()) // only accept bot owner messages
-                        .flatMap(id -> message.getContent())
-                        .ifPresent(content -> {
-                            if ("!close".equals(content)) {
-                                client.logout();
-                            } else if ("!online".equals(content)) {
-                                client.updatePresence(Presence.online()).subscribe();
-                            } else if ("!dnd".equals(content)) {
-                                client.updatePresence(Presence.doNotDisturb()).subscribe();
-                            } else if (content.startsWith("!echo ")) {
-                                message.getAuthor()
-                                    .flatMap(User::getPrivateChannel)
-                                    .flatMap(ch -> ch.createMessage(content.substring("!echo ".length())))
-                                    .subscribe();
-                            }
-                        });
-                    return Mono.just(tuple.getT1());
-                })
-                .onErrorContinue()
-                .doOnError(t -> log.warn("Something is wrong", t))
-                .subscribe();
+                        message.getAuthor()
+                                .map(User::getId)
+                                .filter(id -> tuple.getT2() == id.asLong()) // only accept bot owner messages
+                                .flatMap(id -> message.getContent())
+                                .ifPresent(content -> {
+                                    if ("!close".equals(content)) {
+                                        client.logout();
+                                    } else if ("!online".equals(content)) {
+                                        client.updatePresence(0, Presence.online()).subscribe();
+                                    } else if ("!dnd".equals(content)) {
+                                        client.updatePresence(0, Presence.doNotDisturb()).subscribe();
+                                    } else if (content.startsWith("!echo ")) {
+                                        message.getAuthorAsMember()
+                                                .flatMap(User::getPrivateChannel)
+                                                .flatMap(ch -> ch.createMessage(content.substring("!echo ".length())))
+                                                .subscribe();
+                                    }
+                                });
+                        return Mono.just(tuple.getT1());
+                    })
+                    .doOnError(t -> log.warn("Something is wrong", t))
+                    .subscribe();
         }
     }
 
     public static class LifecycleListener {
 
-        private final DiscordClient client;
+        private final GatewayDiscordClient client;
 
-        public LifecycleListener(DiscordClient client) {
+        public LifecycleListener(GatewayDiscordClient client) {
             this.client = client;
         }
 

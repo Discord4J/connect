@@ -17,8 +17,6 @@
 
 package discord4j.gateway;
 
-import discord4j.gateway.json.GatewayPayload;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import reactor.core.publisher.Flux;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderOptions;
@@ -26,35 +24,27 @@ import reactor.kafka.sender.SenderRecord;
 import reactor.kafka.sender.SenderResult;
 import reactor.util.Logger;
 import reactor.util.Loggers;
-import reactor.util.function.Tuple2;
 
 import java.util.Properties;
 
-public class KafkaPayloadSink<K, V> implements PayloadSink {
+public class KafkaPayloadSink<K, V, T> implements PayloadSink {
 
     private static final Logger log = Loggers.getLogger(KafkaPayloadSink.class);
 
     private final KafkaSender<K, V> sender;
-    private final String topic;
-    private final SinkMapper<K, V> mapper;
+    private final SinkMapper<SenderRecord<K, V, T>> mapper;
 
-    public KafkaPayloadSink(Properties properties, String topic, SinkMapper<K, V> mapper) {
+    public KafkaPayloadSink(Properties properties, SinkMapper<SenderRecord<K, V, T>> mapper) {
         SenderOptions<K, V> senderOptions = SenderOptions.create(properties);
         this.sender = KafkaSender.create(senderOptions);
-        this.topic = topic;
         this.mapper = mapper;
     }
 
     @Override
-    public Flux<?> send(Flux<GatewayPayload<?>> source) {
-        return sender.send(source
-            .map(payload -> {
-                Tuple2<K, V> mapped = mapper.apply(payload);
-                return SenderRecord.create(
-                    new ProducerRecord<>(topic, mapped.getT1(), mapped.getT2()), payload.getSequence());
-            }))
-            .doOnError(e -> log.error("Send failed", e))
-            .doOnNext(SenderResult::recordMetadata);
+    public Flux<?> send(Flux<ConnectPayload> source) {
+        return sender.send(source.flatMap(mapper::apply))
+                .doOnError(e -> log.error("Send failed", e))
+                .doOnNext(SenderResult::recordMetadata);
     }
 
     public void close() {

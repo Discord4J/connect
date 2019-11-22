@@ -17,12 +17,10 @@
 
 package discord4j.gateway;
 
-import discord4j.gateway.json.GatewayPayload;
 import org.reactivestreams.Publisher;
-import reactor.util.function.Tuple2;
-
-import java.util.function.Function;
 
 @FunctionalInterface
-public interface SinkMapper<K, V> extends Function<GatewayPayload<?>, Tuple2<K, V>> {
+public interface SinkMapper<T> {
+
+    Publisher<T> apply(ConnectPayload payload);
 }

@@ -18,65 +18,64 @@ package discord4j.gateway;
 
 import discord4j.gateway.json.GatewayPayload;
 import discord4j.gateway.json.dispatch.Dispatch;
-import discord4j.gateway.payload.PayloadReader;
-import discord4j.gateway.payload.PayloadWriter;
-import discord4j.gateway.retry.RetryOptions;
+import io.netty.buffer.ByteBuf;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
+import java.time.Duration;
 import java.util.function.Function;
 
 public class UpstreamGatewayClient implements GatewayClient {
 
-    private static final Logger senderLogger = Loggers.getLogger("discord4j.gateway.sender");
-    private static final Logger receiverLogger = Loggers.getLogger("discord4j.gateway.receiver");
+    private static final Logger log = Loggers.getLogger(UpstreamGatewayClient.class);
 
     private final DefaultGatewayClient delegate;
     private final PayloadSink sink;
     private final PayloadSource source;
+    private final ShardInfo shardInfo;
 
-    public UpstreamGatewayClient(PayloadReader payloadReader, PayloadWriter payloadWriter,
-                                 RetryOptions retryOptions, String token, IdentifyOptions identifyOptions, PayloadSink payloadSink,
-                                 PayloadSource payloadSource) {
-        this.delegate = new DefaultGatewayClient(payloadReader, payloadWriter, retryOptions, token, identifyOptions);
-        this.sink = payloadSink;
-        this.source = payloadSource;
+    public UpstreamGatewayClient(ConnectGatewayOptions gatewayOptions) {
+        this.delegate = new DefaultGatewayClient(gatewayOptions);
+        this.shardInfo = gatewayOptions.getIdentifyOptions().getShardInfo();
+        this.sink = gatewayOptions.getPayloadSink();
+        this.source = gatewayOptions.getPayloadSource();
     }
 
     @Override
     public Mono<Void> execute(String gatewayUrl) {
-        Mono<Void> senderFuture = sink.send(receiver())
-            .subscribeOn(Schedulers.newSingle("payload-sender"))
-            .log(senderLogger)
-            .doOnError(t -> senderLogger.error("Sender error", t))
-            .then();
+        Mono<Void> senderFuture = sink.send(receiver().map(this::toConnectPayload))
+                .doOnError(t -> log.error("Sender error", t))
+                .then();
 
         Mono<Void> receiverFuture = source.receive(payloadProcessor())
-            .log(receiverLogger)
-            .doOnError(t -> senderLogger.error("Receiver error", t))
-            .then();
+                .doOnError(t -> log.error("Receiver error", t))
+                .then();
 
         return Mono.zip(senderFuture, receiverFuture, delegate.execute(gatewayUrl)).then();
     }
 
-    private Function<GatewayPayload<?>, Mono<Void>> payloadProcessor() {
+    private Function<ConnectPayload, Mono<Void>> payloadProcessor() {
         FluxSink<GatewayPayload<?>> senderSink = sender();
         return payload -> {
             if (senderSink.isCancelled()) {
                 return Mono.error(new IllegalStateException("Sender was cancelled"));
             }
-            senderSink.next(payload);
+            senderSink.next(payload.getGatewayPayload());
             return Mono.empty();
         };
     }
 
+    private ConnectPayload toConnectPayload(GatewayPayload<?> gatewayPayload) {
+        return new ConnectPayload(shardInfo, new SessionInfo(getSessionId(), getSequence()), gatewayPayload);
+    }
+
     @Override
-    public void close(boolean reconnect) {
-        delegate.close(reconnect);
+    public Mono<Void> close(boolean allowResume) {
+        return delegate.close(allowResume);
     }
 
     @Override
@@ -90,8 +89,18 @@ public class UpstreamGatewayClient implements GatewayClient {
     }
 
     @Override
+    public <T> Flux<T> receiver(Function<ByteBuf, Publisher<? extends T>> mapper) {
+        return delegate.receiver(mapper);
+    }
+
+    @Override
     public FluxSink<GatewayPayload<?>> sender() {
         return delegate.sender();
+    }
+
+    @Override
+    public Mono<Void> sendBuffer(Publisher<ByteBuf> publisher) {
+        return delegate.sendBuffer(publisher);
     }
 
     @Override
@@ -100,7 +109,17 @@ public class UpstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public int getLastSequence() {
-        return delegate.getLastSequence();
+    public int getSequence() {
+        return delegate.getSequence();
+    }
+
+    @Override
+    public boolean isConnected() {
+        return delegate.isConnected();
+    }
+
+    @Override
+    public Duration getResponseTime() {
+        return delegate.getResponseTime();
     }
 }

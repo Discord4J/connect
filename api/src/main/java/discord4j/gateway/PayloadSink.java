@@ -17,10 +17,9 @@
 
 package discord4j.gateway;
 
-import discord4j.gateway.json.GatewayPayload;
 import reactor.core.publisher.Flux;
 
 public interface PayloadSink {
 
-    Flux<?> send(Flux<GatewayPayload<?>> source);
+    Flux<?> send(Flux<ConnectPayload> source);
 }

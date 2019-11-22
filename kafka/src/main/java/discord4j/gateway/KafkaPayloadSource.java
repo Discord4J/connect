@@ -17,7 +17,6 @@
 
 package discord4j.gateway;
 
-import discord4j.gateway.json.GatewayPayload;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.KafkaReceiver;
@@ -26,7 +25,6 @@ import reactor.kafka.receiver.ReceiverOptions;
 import reactor.kafka.receiver.ReceiverRecord;
 import reactor.util.Logger;
 import reactor.util.Loggers;
-import reactor.util.function.Tuples;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -39,16 +37,16 @@ public class KafkaPayloadSource<K, V> implements PayloadSource {
 
     private final ReceiverOptions<K, V> receiverOptions;
     private final String topic;
-    private final SourceMapper<K, V> mapper;
+    private final SourceMapper<ReceiverRecord<K, V>> mapper;
 
-    public KafkaPayloadSource(Properties properties, String topic, SourceMapper<K, V> mapper) {
+    public KafkaPayloadSource(Properties properties, String topic, SourceMapper<ReceiverRecord<K, V>> mapper) {
         this.receiverOptions = ReceiverOptions.create(properties);
         this.topic = topic;
         this.mapper = mapper;
     }
 
     @Override
-    public Flux<?> receive(Function<GatewayPayload<?>, Mono<Void>> processor) {
+    public Flux<?> receive(Function<ConnectPayload, Mono<Void>> processor) {
         ReceiverOptions<K, V> options = receiverOptions.subscription(Collections.singleton(topic))
             .addAssignListener(partitions -> log.debug("Partitions assigned: {}", partitions))
             .addRevokeListener(partitions -> log.debug("Partitions revoked: {}", partitions));
@@ -64,7 +62,7 @@ public class KafkaPayloadSource<K, V> implements PayloadSource {
                     record.value());
                 offset.acknowledge();
             })
-            .flatMap(record -> mapper.apply(Tuples.of(record.key(), record.value())))
-            .flatMap(processor::apply);
+            .flatMap(mapper::apply)
+            .flatMap(processor);
     }
 }

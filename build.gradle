@@ -1,9 +1,10 @@
 plugins {
-    id 'java'
+    id 'java-library'
     id 'maven-publish'
-    id 'com.jfrog.bintray' version '1.8.0'
-    id 'com.gorylenko.gradle-git-properties' version '1.5.1' apply false
-    id 'io.spring.dependency-management' version '1.0.4.RELEASE' apply false
+    id 'signing'
+    id 'com.gorylenko.gradle-git-properties' version '2.2.0' apply false
+    id 'com.github.ben-manes.versions' version '0.27.0'
+    id 'net.researchgate.release' version '2.8.1'
 }
 
 ext {
@@ -11,25 +12,35 @@ ext {
     github_org = 'Discord4J'
     project_name = 'connect'
     artifact_group = 'com.discord4j'
-    project_version = '1.0.0-SNAPSHOT'
-    project_description = 'Distributed Bot Framework for Discord4J'
+    project_version = "$version".toString()
+    project_description = 'Distributed Bot Components for Discord4J'
+    repository_url = 'https://github.com/Discord4J/connect'
     project_url = 'https://discord4j.com'
     project_jdk = '1.8'
+    jdk = JavaVersion.current().majorVersion
+    jdk_javadoc = "https://docs.oracle.com/javase/$jdk/docs/api/".toString()
+    if (JavaVersion.current().isJava11Compatible()) {
+        jdk_javadoc = "https://docs.oracle.com/en/java/javase/$jdk/docs/api/".toString()
+    }
 
-    // Dependencies
-    reactor_bom_version = 'Californium-M1'
+    discord4j_core_version = '3.1.0-SNAPSHOT'
+    stores_redis_version = '3.1.0.M1'
+    reactor_kafka_version = '1.2.0.RELEASE'
     jsr305_version = '3.0.2'
     junit_version = '4.12'
     logback_version = '1.3.0-alpha4'
-    d4j_core_version = '2fee221'
-    d4j_stores_version = 'ea3e145'
+
+    isJitpack = "true" == System.getenv("JITPACK")
+    isRelease = !version.toString().endsWith('-SNAPSHOT')
 }
 
 allprojects {
-    apply plugin: 'java'
-    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'java-library'
+    apply plugin: 'com.github.ben-manes.versions'
     apply plugin: 'maven-publish'
-    apply plugin: 'com.jfrog.bintray'
+    if (!isJitpack && isRelease) {
+        apply plugin: 'signing'
+    }
 
     group = artifact_group
     version = project_version
@@ -38,16 +49,155 @@ allprojects {
     sourceCompatibility = project_jdk
     targetCompatibility = project_jdk
 
-    dependencyManagement {
-        imports {
-            mavenBom "io.projectreactor:reactor-bom:$reactor_bom_version"
+    repositories {
+        mavenCentral()
+        jcenter()
+        maven { url 'https://jitpack.io' }
+        maven { url 'https://oss.sonatype.org/content/repositories/staging' }
+        maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+        maven { url 'https://repo.spring.io/milestone' }
+    }
+
+    tasks.withType(Javadoc) {
+        options {
+            encoding = 'UTF-8'
+            tags = ["apiNote:a:API Note:",
+                    "implSpec:a:Implementation Requirements:",
+                    "implNote:a:Implementation Note:"]
+            addStringOption 'Xdoclint:none', '-quiet'
+            addStringOption 'encoding', 'UTF-8'
+            // adding links to javadocs for filling specific classes when not existing inside current javadoc
+            links = [
+                    jdk_javadoc,
+                    "https://fasterxml.github.io/jackson-databind/javadoc/2.10/",
+                    "http://www.reactive-streams.org/reactive-streams-1.0.3-javadoc/",
+                    "https://projectreactor.io/docs/core/release/api/",
+                    "https://projectreactor.io/docs/netty/release/api/",
+                    "https://projectreactor.io/docs/extra/release/api/",
+                    "https://netty.io/4.1/api/"
+            ]
+        }
+        if (JavaVersion.current().isJava9Compatible()) {
+            options.addBooleanOption('html5', true)
         }
     }
 
-    repositories {
-        jcenter()
-        maven { url "https://repo.spring.io/libs-release" }
-        maven { url "https://repo.spring.io/milestone" }
-        maven { url 'https://jitpack.io' }
+    tasks.withType(JavaCompile) {
+        options.encoding = 'UTF-8'
+        options.incremental = true
     }
+
+    task downloadDependencies() {
+        description 'Download all dependencies to the Gradle cache'
+        doLast {
+            configurations.findAll { it.canBeResolved }.files
+        }
+    }
+
+    java {
+        withJavadocJar()
+        withSourcesJar()
+    }
+}
+
+subprojects {
+    archivesBaseName = "discord4j-$project.name"
+
+    tasks.withType(Javadoc) {
+        title = "$archivesBaseName ${version} API"
+        options.windowTitle = "$archivesBaseName ($version)"
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+                artifactId archivesBaseName
+
+                versionMapping {
+                    usage('java-api') {
+                        fromResolutionOf('runtimeClasspath')
+                    }
+                    usage('java-runtime') {
+                        fromResolutionResult()
+                    }
+                }
+
+                pom {
+                    name = "$project.name"
+                    description = 'Distributed Bot Components for Discord4J'
+                    url = 'https://github.com/Discord4J/connect'
+                    organization {
+                        name = 'Discord4J'
+                        url = 'https://discord4j.com'
+                    }
+                    issueManagement {
+                        system = 'GitHub'
+                        url = 'https://github.com/Discord4J/connect/issues'
+                    }
+                    licenses {
+                        license {
+                            name = 'LGPL-3.0'
+                            url = 'https://github.com/Discord4J/connect/LICENSE.txt'
+                            distribution = 'repo'
+                        }
+                    }
+                    scm {
+                        url = 'https://github.com/Discord4J/connect'
+                        connection = 'scm:git:git://github.com/Discord4J/connect.git'
+                        developerConnection = 'scm:git:ssh://git@github.com:Discord4J/connect.git'
+                    }
+                    developers {
+                        developer {
+                            name = 'The Discord4J Team'
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!isJitpack) {
+            repositories {
+                maven {
+                    if (isRelease) {
+                        url 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+                    } else {
+                        url 'https://oss.sonatype.org/content/repositories/snapshots'
+                    }
+                    def sonatypeUsername = findProperty('sonatypeUsername')
+                    def sonatypePassword = findProperty('sonatypePassword')
+                    if (sonatypeUsername != null && sonatypePassword != null) {
+                        credentials {
+                            username sonatypeUsername
+                            password sonatypePassword
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!isJitpack && isRelease) {
+        signing {
+            def signingKey = findProperty("signingKey")
+            def signingPassword = findProperty("signingPassword")
+            if (signingKey != null && signingPassword != null) {
+                useInMemoryPgpKeys(new String(signingKey.decodeBase64()), signingPassword as String)
+            }
+            sign publishing.publications.mavenJava
+        }
+    }
+}
+
+release {
+    preTagCommitMessage = 'Release version'
+    tagCommitMessage = 'Release version'
+    newVersionCommitMessage = 'Next development version'
+    git {
+        requireBranch = ''
+    }
+}
+
+wrapper {
+    distributionType = Wrapper.DistributionType.ALL
 }
