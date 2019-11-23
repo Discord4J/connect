@@ -209,9 +209,9 @@ public class KafkaBotTest {
                                     if ("!close".equals(content)) {
                                         client.logout();
                                     } else if ("!online".equals(content)) {
-                                        client.updatePresence(0, Presence.online()).subscribe();
+                                        client.updatePresence(Presence.online()).subscribe();
                                     } else if ("!dnd".equals(content)) {
-                                        client.updatePresence(0, Presence.doNotDisturb()).subscribe();
+                                        client.updatePresence(Presence.doNotDisturb()).subscribe();
                                     } else if (content.startsWith("!echo ")) {
                                         message.getAuthorAsMember()
                                                 .flatMap(User::getPrivateChannel)
