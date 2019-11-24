@@ -101,7 +101,7 @@ allprojects {
 }
 
 subprojects {
-    archivesBaseName = "discord4j-$project.name"
+    archivesBaseName = "connect-$project.name"
 
     tasks.withType(Javadoc) {
         title = "$archivesBaseName ${version} API"
