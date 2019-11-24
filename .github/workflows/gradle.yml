@@ -14,4 +14,9 @@ jobs:
       with:
         java-version: 1.8
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build publish
+      env:
+        ORG_GRADLE_PROJECT_signingKey: ${{ secrets.signingKey }}
+        ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.signingPassword }}
+        ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.sonatypeUsername }}
+        ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.sonatypePassword }}
