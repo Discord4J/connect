@@ -1,0 +1,5 @@
+dependencies {
+    api project(':common')
+    api "io.rsocket:rsocket-core:$rsocket_version"
+    api "io.rsocket:rsocket-transport-netty:$rsocket_version"
+}

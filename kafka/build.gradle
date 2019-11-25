@@ -1,8 +1,4 @@
 dependencies {
     api project(':common')
     api "io.projectreactor.kafka:reactor-kafka:$reactor_kafka_version"
-
-    testImplementation "com.discord4j:stores-redis:$stores_redis_version"
-    testImplementation "ch.qos.logback:logback-classic:$logback_version"
-    testImplementation "junit:junit:$junit_version"
 }
