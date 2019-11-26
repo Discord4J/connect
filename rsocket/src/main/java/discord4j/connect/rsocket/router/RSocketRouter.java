@@ -121,8 +121,7 @@ public class RSocketRouter implements Router {
                                         sockets.remove(socketAddress);
                                         log.info("Reconnecting to server: {}", rc.exception().toString());
                                     }));
-                })
-                .publishOn(reactorResources.getBlockingTaskScheduler()));
+                }), reactorResources);
     }
 
     private Mono<RSocket> getSocket(InetSocketAddress socketAddress) {
