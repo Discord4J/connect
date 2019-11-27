@@ -6,27 +6,31 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import discord4j.common.JacksonResources;
-import discord4j.core.DiscordClient;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.UpstreamGatewayClient;
+import discord4j.core.DiscordClient;
 import discord4j.store.redis.JacksonRedisSerializer;
 import discord4j.store.redis.RedisStoreService;
 import discord4j.store.redis.StoreRedisCodec;
 import discord4j.store.redis.StringSerializer;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.codec.RedisCodec;
+import reactor.core.publisher.Hooks;
 
 import java.net.InetSocketAddress;
 
 public class ExampleRSocketLeader {
 
     public static void main(String[] args) {
+        Hooks.onOperatorDebug();
+
         InetSocketAddress serverAddress = new InetSocketAddress(33444);
 
         JacksonResources jackson = new JacksonResources();
+
         RedisClient redisClient = RedisClient.create("redis://localhost:6379");
         RedisCodec<String, Object> codec = new StoreRedisCodec<>(new StringSerializer(),
-                new JacksonRedisSerializer(jackson.getObjectMapper().copy()
+                new JacksonRedisSerializer(new JacksonResources().getObjectMapper()
                         .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
                         .activateDefaultTyping(BasicPolymorphicTypeValidator.builder()
                                         .allowIfSubType("discord4j.").build(),

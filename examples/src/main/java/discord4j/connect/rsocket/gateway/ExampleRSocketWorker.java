@@ -18,18 +18,21 @@ import discord4j.store.redis.StoreRedisCodec;
 import discord4j.store.redis.StringSerializer;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.codec.RedisCodec;
+import reactor.core.publisher.Hooks;
 
 import java.net.InetSocketAddress;
 
 public class ExampleRSocketWorker {
 
     public static void main(String[] args) {
+        Hooks.onOperatorDebug();
+
         InetSocketAddress serverAddress = new InetSocketAddress(33444);
 
         JacksonResources jackson = new JacksonResources();
         RedisClient redisClient = RedisClient.create("redis://localhost:6379");
         RedisCodec<String, Object> codec = new StoreRedisCodec<>(new StringSerializer(),
-                new JacksonRedisSerializer(jackson.getObjectMapper().copy()
+                new JacksonRedisSerializer(new JacksonResources().getObjectMapper()
                         .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
                         .activateDefaultTyping(BasicPolymorphicTypeValidator.builder()
                                         .allowIfSubType("discord4j.").build(),

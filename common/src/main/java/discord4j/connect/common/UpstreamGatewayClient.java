@@ -22,7 +22,9 @@ import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
 import discord4j.gateway.json.GatewayPayload;
 import discord4j.gateway.json.dispatch.Dispatch;
+import discord4j.gateway.payload.PayloadReader;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
@@ -31,6 +33,7 @@ import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.function.Function;
 
@@ -42,21 +45,24 @@ public class UpstreamGatewayClient implements GatewayClient {
     private final PayloadSink sink;
     private final PayloadSource source;
     private final ShardInfo shardInfo;
+    private final PayloadReader payloadReader;
 
     public UpstreamGatewayClient(ConnectGatewayOptions gatewayOptions) {
         this.delegate = new DefaultGatewayClient(gatewayOptions);
         this.shardInfo = gatewayOptions.getIdentifyOptions().getShardInfo();
         this.sink = gatewayOptions.getPayloadSink();
         this.source = gatewayOptions.getPayloadSource();
+        this.payloadReader = gatewayOptions.getPayloadReader();
     }
 
     @Override
     public Mono<Void> execute(String gatewayUrl) {
-        Mono<Void> senderFuture = sink.send(receiver().map(this::toConnectPayload))
-                .subscribeOn(Schedulers.newSingle("payload-sender"))
-                .doOnError(t -> log.error("Sender error", t))
-                .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
-                .then();
+        Mono<Void> senderFuture =
+                sink.send(receiver(buf -> Mono.just(toConnectPayload(buf.toString(StandardCharsets.UTF_8)))))
+                        .subscribeOn(Schedulers.newSingle("payload-sender"))
+                        .doOnError(t -> log.error("Sender error", t))
+                        .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
+                        .then();
 
         Mono<Void> receiverFuture = source.receive(payloadProcessor())
                 .doOnError(t -> log.error("Receiver error", t))
@@ -68,16 +74,17 @@ public class UpstreamGatewayClient implements GatewayClient {
 
     private Function<ConnectPayload, Mono<Void>> payloadProcessor() {
         FluxSink<GatewayPayload<?>> senderSink = sender();
-        return payload -> {
+        return connectPayload -> {
             if (senderSink.isCancelled()) {
                 return Mono.error(new IllegalStateException("Sender was cancelled"));
             }
-            senderSink.next(payload.getPayload());
-            return Mono.empty();
+            return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(connectPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
+                    .doOnNext(senderSink::next)
+                    .then();
         };
     }
 
-    private ConnectPayload toConnectPayload(GatewayPayload<?> gatewayPayload) {
+    private ConnectPayload toConnectPayload(String gatewayPayload) {
         return new ConnectPayload(shardInfo, new SessionInfo(getSessionId(), getSequence()), gatewayPayload);
     }
 

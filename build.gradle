@@ -55,6 +55,7 @@ allprojects {
     targetCompatibility = project_jdk
 
     repositories {
+        mavenLocal()
         mavenCentral()
         jcenter()
         maven { url 'https://jitpack.io' }

@@ -1,7 +1,9 @@
 package discord4j.connect.rsocket.gateway;
 
-import discord4j.common.LogUtil;
-import io.rsocket.*;
+import io.rsocket.AbstractRSocket;
+import io.rsocket.Payload;
+import io.rsocket.RSocket;
+import io.rsocket.RSocketFactory;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
@@ -63,7 +65,7 @@ public class RSocketShardLeaderServer {
                                 String key = command[0];
                                 String topic = command[1];
                                 if (key.equals("produce")) {
-                                    return flux
+                                    return flux.doOnSubscribe(s -> log.debug("[{}] Producing to {}", id, topic))
                                             .map(payload -> {
                                                 log.trace("[{}] Produce to {}: {}", id, topic, payload.getDataUtf8());
                                                 getSink(topic).next(payload);
@@ -72,14 +74,11 @@ public class RSocketShardLeaderServer {
                                 } else if (key.equals("consume")) {
                                     // flux is a sequence of "ACKs" to trigger the next payload
                                     return Flux.defer(() -> getQueue(topic))
-                                            .doOnRequest(d -> log.info("[{}] Request {}", id, d))
                                             .limitRate(1)
-                                            .doOnNext(payload -> log.info("{}",
-                                                    LogUtil.formatValue(payload.getDataUtf8(), 150)))
-                                            .zipWith(flux.doOnNext(p -> log.info("[{}] Got {}", id, p.getDataUtf8())))
+                                            .zipWith(flux)
                                             .map(Tuple2::getT1)
+                                            .doOnSubscribe(s -> log.debug("[{}] Consuming from {}", id, topic))
                                             .doOnNext(payload -> {
-                                                log.info("[{}] Consume payload from {}", id, command[1]);
                                                 if (sendingSocket.availability() < 1.0d) {
                                                     throw new IllegalStateException("Consumer is unavailable");
                                                 }
@@ -89,7 +88,6 @@ public class RSocketShardLeaderServer {
                             return Flux.error(new IllegalArgumentException(
                                     "Invalid routing: must be produce, consume"));
                         })
-                        .doOnSubscribe(s -> log.info("[{}] Starting channel", id))
                         .doFinally(s -> log.info("[{}] Terminating channel after {}", id, s));
             }
 

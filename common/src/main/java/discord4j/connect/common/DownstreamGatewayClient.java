@@ -25,13 +25,16 @@ import discord4j.gateway.json.dispatch.Dispatch;
 import discord4j.gateway.json.dispatch.Ready;
 import discord4j.gateway.payload.PayloadReader;
 import discord4j.gateway.payload.PayloadWriter;
+import discord4j.gateway.retry.GatewayStateChange;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.*;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -74,12 +77,13 @@ public class DownstreamGatewayClient implements GatewayClient {
     public Mono<Void> execute(String gatewayUrl) {
         return Mono.defer(() -> {
             Mono<Void> inboundFuture = source.receive(
-                    payload -> {
+                    inPayload -> {
                         if (receiverSink.isCancelled()) {
                             return Mono.error(new IllegalStateException("Sender was cancelled"));
                         }
-                        receiverSink.next(payload.getPayload());
-                        return Mono.empty();
+                        return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(inPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
+                                .doOnNext(receiverSink::next)
+                                .then();
                     })
                     .then();
 
@@ -87,11 +91,18 @@ public class DownstreamGatewayClient implements GatewayClient {
                     .doOnNext(this::handlePayload)
                     .then();
 
-            Mono<Void> senderFuture = sink.send(sender.map(this::toConnectPayload))
-                    .subscribeOn(Schedulers.newSingle("payload-sender"))
-                    .then();
+            Mono<Void> senderFuture =
+                    sink.send(sender.flatMap(gatewayPayload -> Flux.from(payloadWriter.write(gatewayPayload))
+                            .map(buf -> buf.toString(StandardCharsets.UTF_8))
+                            .map(this::toConnectPayload)))
+                            .subscribeOn(Schedulers.newSingle("payload-sender"))
+                            .then();
 
             return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture)
+                    // a downstream client should only signal "connected" state on subscription
+                    // do not signal other events to prevent GatewayBootstrap evicting this client from the map
+                    // TODO: improve on how to signal state for this client
+                    .doOnSubscribe(s -> dispatchSink.next(GatewayStateChange.connected()))
                     .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
                     .doOnCancel(() -> close(false))
                     .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
@@ -99,7 +110,7 @@ public class DownstreamGatewayClient implements GatewayClient {
         });
     }
 
-    private ConnectPayload toConnectPayload(GatewayPayload<?> gatewayPayload) {
+    private ConnectPayload toConnectPayload(String gatewayPayload) {
         return new ConnectPayload(shardInfo, new SessionInfo(getSessionId(), getSequence()), gatewayPayload);
     }
 
@@ -124,13 +135,13 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     @Override
     public boolean isConnected() {
-        // TODO add support
+        // TODO: add support for DownstreamGatewayClient::isConnected
         return true;
     }
 
     @Override
     public Duration getResponseTime() {
-        // TODO add support
+        // TODO: add support for DownstreamGatewayClient::getResponseTime
         return Duration.ZERO;
     }
 

@@ -4,18 +4,17 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
-import discord4j.gateway.json.GatewayPayload;
 
 public class ConnectPayload {
 
     private final ShardInfo shard;
     private final SessionInfo session;
-    private final GatewayPayload<?> payload;
+    private final String payload;
 
     @JsonCreator
     public ConnectPayload(@JsonProperty("shard") ShardInfo shard,
                           @JsonProperty("session") SessionInfo session,
-                          @JsonProperty("payload") GatewayPayload<?> payload) {
+                          @JsonProperty("payload") String payload) {
         this.shard = shard;
         this.session = session;
         this.payload = payload;
@@ -29,7 +28,7 @@ public class ConnectPayload {
         return session;
     }
 
-    public GatewayPayload<?> getPayload() {
+    public String getPayload() {
         return payload;
     }
 }
