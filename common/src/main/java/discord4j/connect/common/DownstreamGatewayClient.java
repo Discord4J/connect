@@ -81,6 +81,9 @@ public class DownstreamGatewayClient implements GatewayClient {
                         if (receiverSink.isCancelled()) {
                             return Mono.error(new IllegalStateException("Sender was cancelled"));
                         }
+                        if (inPayload.getShard().getIndex() != shardInfo.getIndex()) {
+                            return Mono.empty();
+                        }
                         return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(inPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
                                 .doOnNext(receiverSink::next)
                                 .then();

@@ -8,10 +8,7 @@ import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
 import org.reactivestreams.Publisher;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxProcessor;
-import reactor.core.publisher.FluxSink;
-import reactor.core.publisher.Mono;
+import reactor.core.publisher.*;
 import reactor.extra.processor.WorkQueueProcessor;
 import reactor.util.Logger;
 import reactor.util.Loggers;
@@ -20,18 +17,38 @@ import reactor.util.function.Tuple2;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 public class RSocketShardLeaderServer {
 
     private static final Logger log = Loggers.getLogger(RSocketShardLeaderServer.class);
 
     private final TcpServerTransport serverTransport;
+    private final Function<String, FluxProcessor<Payload, Payload>> processorFactory;
 
     private final Map<String, FluxProcessor<Payload, Payload>> queues = new ConcurrentHashMap<>();
     private final Map<String, FluxSink<Payload>> sinks = new ConcurrentHashMap<>();
 
     public RSocketShardLeaderServer(InetSocketAddress socketAddress) {
+        this(socketAddress, topic -> {
+            if (topic.contains("outbound")) {
+                log.info("Creating fanout queue: {}", topic);
+                return EmitterProcessor.create(1024, false);
+            }
+            log.info("Creating work queue: {}", topic);
+            return WorkQueueProcessor.<Payload>builder()
+                    .autoCancel(false)
+                    .share(true)
+                    .name(topic)
+                    .bufferSize(1024)
+                    .build();
+        });
+    }
+
+    public RSocketShardLeaderServer(InetSocketAddress socketAddress, Function<String,
+            FluxProcessor<Payload, Payload>> processorFactory) {
         this.serverTransport = TcpServerTransport.create(socketAddress);
+        this.processorFactory = processorFactory;
     }
 
     public Mono<CloseableChannel> start() {
@@ -96,7 +113,7 @@ public class RSocketShardLeaderServer {
                     throw new IllegalArgumentException("Missing topic metadata");
                 }
                 String metadata = payload.getMetadataUtf8();
-                String[] tokens = metadata.split(":");
+                String[] tokens = metadata.split(":", 2);
                 if (tokens.length != 2 || tokens[1].isEmpty()) {
                     throw new IllegalArgumentException("Invalid topic metadata");
                 }
@@ -104,15 +121,7 @@ public class RSocketShardLeaderServer {
             }
 
             private FluxProcessor<Payload, Payload> getQueue(String topic) {
-                return queues.computeIfAbsent(topic, k -> {
-                    log.info("Creating work queue for topic: {}", topic);
-                    return WorkQueueProcessor.<Payload>builder()
-                            .autoCancel(false)
-                            .share(true)
-                            .name(topic)
-                            .bufferSize(1024)
-                            .build();
-                });
+                return queues.computeIfAbsent(topic, processorFactory);
             }
 
             private FluxSink<Payload> getSink(String topic) {

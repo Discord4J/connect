@@ -40,6 +40,7 @@ public class ExampleRSocketLeader {
                 .setJacksonResources(jackson)
                 .build()
                 .gateway()
+                .setShardCount(2)
                 .setStoreService(new RedisStoreService(redisClient, codec))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(serverAddress,

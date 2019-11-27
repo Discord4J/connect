@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import discord4j.common.JacksonResources;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.DownstreamGatewayClient;
+import discord4j.connect.common.PayloadSink;
+import discord4j.connect.common.PayloadSource;
 import discord4j.connect.support.BotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
@@ -38,16 +40,20 @@ public class ExampleRSocketWorker {
                                         .allowIfSubType("discord4j.").build(),
                                 ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY)));
 
+        // we need to share the PayloadSource among worker internal DownstreamGatewayClients
+        PayloadSink payloadSink = new RSocketPayloadSink(serverAddress,
+                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound"));
+        PayloadSource payloadSource = new RSocketPayloadSource(serverAddress, "inbound",
+                new RSocketJacksonSourceMapper(jackson.getObjectMapper()));
+
         GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
                 .setJacksonResources(jackson)
                 .build()
                 .gateway()
+                .setShardCount(2)
+                .setMemberRequest(false)
                 .setStoreService(new ReadOnlyStoreService(new RedisStoreService(redisClient, codec)))
-                .setExtraOptions(o -> new ConnectGatewayOptions(o,
-                        new RSocketPayloadSink(serverAddress,
-                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound")),
-                        new RSocketPayloadSource(serverAddress, "inbound",
-                                new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
+                .setExtraOptions(o -> new ConnectGatewayOptions(o, payloadSink, payloadSource))
                 .connect(DownstreamGatewayClient::new)
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);
