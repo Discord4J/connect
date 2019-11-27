@@ -4,6 +4,7 @@ import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.domain.lifecycle.ReadyEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Message;
+import discord4j.core.object.presence.Activity;
 import discord4j.core.object.presence.Presence;
 import discord4j.rest.entity.data.ApplicationInfoData;
 import reactor.core.publisher.Mono;
@@ -108,13 +109,17 @@ public class BotSupport {
             return Mono.justOrEmpty(message.getContent())
                     .filter(content -> content.startsWith("!status "))
                     .map(content -> {
-                        String status = content.substring("!status ".length());
+                        String[] tokens = content.split(" ");
+                        String status = tokens.length > 1 ? tokens[1] : "";
+                        String activity = tokens.length > 2 ? tokens[2] : null;
                         if (status.equalsIgnoreCase("online")) {
-                            return Presence.online();
+                            return activity != null ? Presence.online(Activity.playing(activity)) : Presence.online();
                         } else if (status.equalsIgnoreCase("dnd")) {
-                            return Presence.doNotDisturb();
+                            return activity != null ? Presence.doNotDisturb(Activity.playing(activity)) : Presence.doNotDisturb();
+                        } else if (status.equalsIgnoreCase("idle")) {
+                            return activity != null ? Presence.idle(Activity.playing(activity)) : Presence.idle();
                         } else {
-                            return Presence.idle();
+                            return Presence.online();
                         }
                     })
                     .flatMap(presence -> event.getClient().updatePresence(presence))
