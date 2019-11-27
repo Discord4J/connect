@@ -50,7 +50,6 @@ public class ExampleRSocketWorker {
                 .setJacksonResources(jackson)
                 .build()
                 .gateway()
-                .setShardCount(2)
                 .setMemberRequest(false)
                 .setStoreService(new ReadOnlyStoreService(new RedisStoreService(redisClient, codec)))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o, payloadSink, payloadSource))
