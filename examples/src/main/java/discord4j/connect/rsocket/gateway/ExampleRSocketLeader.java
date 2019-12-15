@@ -9,6 +9,7 @@ import discord4j.common.JacksonResources;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.UpstreamGatewayClient;
 import discord4j.core.DiscordClient;
+import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.redis.JacksonRedisSerializer;
 import discord4j.store.redis.RedisStoreService;
 import discord4j.store.redis.StoreRedisCodec;
@@ -40,6 +41,8 @@ public class ExampleRSocketLeader {
                 .setJacksonResources(jackson)
                 .build()
                 .gateway()
+                .setSharding(ShardingStrategy.fixed(2))
+                .setGuildSubscriptions(false)
                 .setStoreService(new RedisStoreService(redisClient, codec))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(serverAddress,
@@ -47,7 +50,8 @@ public class ExampleRSocketLeader {
                         new RSocketPayloadSource(serverAddress, "outbound",
                                 new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
                 .connect(UpstreamGatewayClient::new)
-                .block()
+                .blockOptional()
+                .orElseThrow(RuntimeException::new)
                 .onDisconnect()
                 .block();
     }

@@ -13,6 +13,7 @@ import discord4j.connect.common.PayloadSource;
 import discord4j.connect.support.BotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
+import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.api.readonly.ReadOnlyStoreService;
 import discord4j.store.redis.JacksonRedisSerializer;
 import discord4j.store.redis.RedisStoreService;
@@ -50,8 +51,9 @@ public class ExampleRSocketWorker {
                 .setJacksonResources(jackson)
                 .build()
                 .gateway()
-                .setMemberRequest(false)
-                .setStoreService(new ReadOnlyStoreService(new RedisStoreService(redisClient, codec)))
+                .setSharding(ShardingStrategy.single()) // required to allow a single downstream reading from all shards
+                .setMemberRequest(false) // recommended, leader makes these requests already
+                .setStoreService(new ReadOnlyStoreService(new RedisStoreService(redisClient, codec))) // read-only
                 .setExtraOptions(o -> new ConnectGatewayOptions(o, payloadSink, payloadSource))
                 .connect(DownstreamGatewayClient::new)
                 .blockOptional()

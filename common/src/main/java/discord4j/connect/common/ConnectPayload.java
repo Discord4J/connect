@@ -31,4 +31,13 @@ public class ConnectPayload {
     public String getPayload() {
         return payload;
     }
+
+    @Override
+    public String toString() {
+        return "ConnectPayload{" +
+                "shard=" + shard +
+                ", session=" + session +
+                ", payload='" + payload + '\'' +
+                '}';
+    }
 }

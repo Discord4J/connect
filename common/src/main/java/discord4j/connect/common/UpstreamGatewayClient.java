@@ -57,6 +57,7 @@ public class UpstreamGatewayClient implements GatewayClient {
 
     @Override
     public Mono<Void> execute(String gatewayUrl) {
+        // Receive from Discord --> Send to downstream
         Mono<Void> senderFuture =
                 sink.send(receiver(buf -> Mono.just(toConnectPayload(buf.toString(StandardCharsets.UTF_8)))))
                         .subscribeOn(Schedulers.newSingle("payload-sender"))
@@ -64,6 +65,7 @@ public class UpstreamGatewayClient implements GatewayClient {
                         .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
                         .then();
 
+        // Receive from downstream --> Send to Discord
         Mono<Void> receiverFuture = source.receive(payloadProcessor())
                 .doOnError(t -> log.error("Receiver error", t))
                 .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
@@ -119,6 +121,11 @@ public class UpstreamGatewayClient implements GatewayClient {
     @Override
     public Mono<Void> sendBuffer(Publisher<ByteBuf> publisher) {
         return delegate.sendBuffer(publisher);
+    }
+
+    @Override
+    public int getShardCount() {
+        return shardInfo.getCount();
     }
 
     @Override

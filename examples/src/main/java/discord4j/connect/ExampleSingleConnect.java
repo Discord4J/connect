@@ -3,6 +3,7 @@ package discord4j.connect;
 import discord4j.connect.support.BotSupport;
 import discord4j.core.DiscordClientBuilder;
 import discord4j.core.GatewayDiscordClient;
+import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.jdk.JdkStoreService;
 
 public class ExampleSingleConnect {
@@ -12,7 +13,7 @@ public class ExampleSingleConnect {
                 .build()
                 .gateway()
                 .setStoreService(new JdkStoreService())
-                .setShardCount(1)
+                .setSharding(ShardingStrategy.fixed(1))
                 .connect()
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);

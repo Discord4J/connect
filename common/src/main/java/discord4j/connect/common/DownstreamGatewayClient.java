@@ -21,8 +21,9 @@ import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
 import discord4j.gateway.json.GatewayPayload;
 import discord4j.gateway.json.Opcode;
+import discord4j.gateway.json.ShardGatewayPayload;
 import discord4j.gateway.json.dispatch.Dispatch;
-import discord4j.gateway.json.dispatch.Ready;
+import discord4j.gateway.json.dispatch.ShardAwareDispatch;
 import discord4j.gateway.payload.PayloadReader;
 import discord4j.gateway.payload.PayloadWriter;
 import discord4j.gateway.retry.GatewayStateChange;
@@ -49,6 +50,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     private final EmitterProcessor<GatewayPayload<?>> sender = EmitterProcessor.create(false);
 
     private final AtomicInteger lastSequence = new AtomicInteger(0);
+    private final AtomicInteger shardCount = new AtomicInteger();
     private final AtomicReference<String> sessionId = new AtomicReference<>("");
 
     private final FluxSink<Dispatch> dispatchSink;
@@ -57,17 +59,20 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     private final PayloadSink sink;
     private final PayloadSource source;
-    private final ShardInfo shardInfo;
     private final PayloadReader payloadReader;
     private final PayloadWriter payloadWriter;
+    private final ShardInfo initialShardInfo;
+    private final boolean filterByIndex;
     private final MonoProcessor<Void> closeFuture = MonoProcessor.create();
 
     public DownstreamGatewayClient(ConnectGatewayOptions gatewayOptions) {
         this.sink = gatewayOptions.getPayloadSink();
         this.source = gatewayOptions.getPayloadSource();
-        this.shardInfo = gatewayOptions.getIdentifyOptions().getShardInfo();
         this.payloadReader = gatewayOptions.getPayloadReader();
         this.payloadWriter = gatewayOptions.getPayloadWriter();
+        this.initialShardInfo = gatewayOptions.getIdentifyOptions().getShardInfo();
+        this.filterByIndex = initialShardInfo.getIndex() != 0 || initialShardInfo.getCount() != 1;
+        this.shardCount.set(gatewayOptions.getIdentifyOptions().getShardCount());
         this.dispatchSink = dispatch.sink(FluxSink.OverflowStrategy.LATEST);
         this.receiverSink = receiver.sink(FluxSink.OverflowStrategy.LATEST);
         this.senderSink = sender.sink(FluxSink.OverflowStrategy.LATEST);
@@ -76,15 +81,23 @@ public class DownstreamGatewayClient implements GatewayClient {
     @Override
     public Mono<Void> execute(String gatewayUrl) {
         return Mono.defer(() -> {
+            // Receive from upstream -> Send to user
             Mono<Void> inboundFuture = source.receive(
                     inPayload -> {
                         if (receiverSink.isCancelled()) {
                             return Mono.error(new IllegalStateException("Sender was cancelled"));
                         }
-                        if (inPayload.getShard().getIndex() != shardInfo.getIndex()) {
+
+                        if (filterByIndex && inPayload.getShard().getIndex() != initialShardInfo.getIndex()) {
                             return Mono.empty();
                         }
+                        sessionId.set(inPayload.getSession().getId());
+                        shardCount.set(inPayload.getShard().getCount());
+
+                        log.trace("<< {}", inPayload);
+
                         return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(inPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
+                                .map(payload -> new ShardGatewayPayload<>(payload, inPayload.getShard().getIndex()))
                                 .doOnNext(receiverSink::next)
                                 .then();
                     })
@@ -94,17 +107,21 @@ public class DownstreamGatewayClient implements GatewayClient {
                     .doOnNext(this::handlePayload)
                     .then();
 
+            // Receive from user -> Send to upstream
             Mono<Void> senderFuture =
-                    sink.send(sender.flatMap(gatewayPayload -> Flux.from(payloadWriter.write(gatewayPayload))
+                    sink.send(sender.flatMap(payload -> Flux.from(payloadWriter.write(payload))
                             .map(buf -> buf.toString(StandardCharsets.UTF_8))
-                            .map(this::toConnectPayload)))
+                            .map(str -> {
+                                ConnectPayload cp = new ConnectPayload(getShardInfo(payload), getSessionInfo(), str);
+                                log.trace(">> {}", cp);
+                                return cp;
+                            })))
                             .subscribeOn(Schedulers.newSingle("payload-sender"))
                             .then();
 
             return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture)
                     // a downstream client should only signal "connected" state on subscription
-                    // do not signal other events to prevent GatewayBootstrap evicting this client from the map
-                    // TODO: improve on how to signal state for this client
+                    // TODO: improve signalling state for this client
                     .doOnSubscribe(s -> dispatchSink.next(GatewayStateChange.connected()))
                     .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
                     .doOnCancel(() -> close(false))
@@ -113,8 +130,16 @@ public class DownstreamGatewayClient implements GatewayClient {
         });
     }
 
-    private ConnectPayload toConnectPayload(String gatewayPayload) {
-        return new ConnectPayload(shardInfo, new SessionInfo(getSessionId(), getSequence()), gatewayPayload);
+    private ShardInfo getShardInfo(GatewayPayload<?> payload) {
+        if (payload instanceof ShardGatewayPayload) {
+            ShardGatewayPayload<?> shardPayload = (ShardGatewayPayload<?>) payload;
+            return new ShardInfo(shardPayload.getShardIndex(), getShardCount());
+        }
+        return initialShardInfo;
+    }
+
+    private SessionInfo getSessionInfo() {
+        return new SessionInfo(getSessionId(), getSequence());
     }
 
     private GatewayPayload<?> updateSequence(GatewayPayload<?> payload) {
@@ -126,14 +151,21 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     private void handlePayload(GatewayPayload<?> payload) {
         if (Opcode.DISPATCH.equals(payload.getOp())) {
-            if (payload.getData() instanceof Ready) {
-                String newSessionId = ((Ready) payload.getData()).getSessionId();
-                sessionId.set(newSessionId);
-            }
             if (payload.getData() != null) {
-                dispatchSink.next((Dispatch) payload.getData());
+                if (payload instanceof ShardGatewayPayload) {
+                    ShardGatewayPayload<?> shardPayload = (ShardGatewayPayload<?>) payload;
+                    dispatchSink.next(new ShardAwareDispatch(shardPayload.getShardIndex(), getShardCount(),
+                            (Dispatch) payload.getData()));
+                } else {
+                    dispatchSink.next((Dispatch) payload.getData());
+                }
             }
         }
+    }
+
+    @Override
+    public int getShardCount() {
+        return shardCount.get();
     }
 
     @Override
@@ -158,7 +190,7 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     @Override
     public Flux<Dispatch> dispatch() {
-        return dispatch;
+        return dispatch.doOnSubscribe(s -> log.info("Subscribed to dispatch sequence"));
     }
 
     @Override
