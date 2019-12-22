@@ -6,6 +6,7 @@ import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Message;
 import discord4j.core.object.presence.Activity;
 import discord4j.core.object.presence.Presence;
+import discord4j.core.object.util.Snowflake;
 import discord4j.rest.entity.data.ApplicationInfoData;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -92,6 +93,8 @@ public class BotSupport {
                                         .blockOptional()
                                         .orElseThrow(RuntimeException::new)
                                         .getAvatarUrl());
+                                spec.addField("Self ID", event.getClient().getSelfId().blockOptional()
+                                        .orElse(Snowflake.of(0L)).asString(), false);
                                 spec.addField("Servers", event.getClient().getGuilds().count()
                                         .blockOptional()
                                         .orElse(-1L)
@@ -115,7 +118,8 @@ public class BotSupport {
                         if (status.equalsIgnoreCase("online")) {
                             return activity != null ? Presence.online(Activity.playing(activity)) : Presence.online();
                         } else if (status.equalsIgnoreCase("dnd")) {
-                            return activity != null ? Presence.doNotDisturb(Activity.playing(activity)) : Presence.doNotDisturb();
+                            return activity != null ? Presence.doNotDisturb(
+                                    Activity.playing(activity)) : Presence.doNotDisturb();
                         } else if (status.equalsIgnoreCase("idle")) {
                             return activity != null ? Presence.idle(Activity.playing(activity)) : Presence.idle();
                         } else {
@@ -128,6 +132,7 @@ public class BotSupport {
     }
 
     public abstract static class EventHandler {
+
         public abstract Mono<Void> onMessageCreate(MessageCreateEvent event);
     }
 }

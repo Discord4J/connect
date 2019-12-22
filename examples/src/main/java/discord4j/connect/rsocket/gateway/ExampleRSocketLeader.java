@@ -1,21 +1,12 @@
 package discord4j.connect.rsocket.gateway;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import discord4j.common.JacksonResources;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.UpstreamGatewayClient;
 import discord4j.core.DiscordClient;
 import discord4j.core.shard.ShardingStrategy;
-import discord4j.store.redis.JacksonRedisSerializer;
 import discord4j.store.redis.RedisStoreService;
-import discord4j.store.redis.StoreRedisCodec;
-import discord4j.store.redis.StringSerializer;
 import io.lettuce.core.RedisClient;
-import io.lettuce.core.codec.RedisCodec;
 import reactor.core.publisher.Hooks;
 
 import java.net.InetSocketAddress;
@@ -30,20 +21,19 @@ public class ExampleRSocketLeader {
         JacksonResources jackson = new JacksonResources();
 
         RedisClient redisClient = RedisClient.create("redis://localhost:6379");
-        RedisCodec<String, Object> codec = new StoreRedisCodec<>(new StringSerializer(),
-                new JacksonRedisSerializer(new JacksonResources().getObjectMapper()
-                        .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
-                        .activateDefaultTyping(BasicPolymorphicTypeValidator.builder()
-                                        .allowIfSubType("discord4j.").build(),
-                                ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY)));
 
         DiscordClient.builder(System.getenv("token"))
                 .setJacksonResources(jackson)
                 .build()
                 .gateway()
-                .setSharding(ShardingStrategy.fixed(2))
+                .setSharding(ShardingStrategy.recommended()) // if using the recommended amount
+//                .setSharding(ShardingStrategy.builder() // for a custom strategy
+//                        .indexes(0)
+//                        .count(2)
+//                        .build())
+//                .setSharding(ShardingStrategy.fixed(2)) // if using a fixed amount of shards
                 .setGuildSubscriptions(false)
-                .setStoreService(new RedisStoreService(redisClient, codec))
+                .setStoreService(new RedisStoreService(redisClient, RedisStoreService.defaultCodec()))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(serverAddress,
                                 new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "inbound")),

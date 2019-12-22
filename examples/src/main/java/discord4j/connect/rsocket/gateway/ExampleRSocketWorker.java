@@ -1,26 +1,15 @@
 package discord4j.connect.rsocket.gateway;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import discord4j.common.JacksonResources;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.DownstreamGatewayClient;
-import discord4j.connect.common.PayloadSink;
-import discord4j.connect.common.PayloadSource;
 import discord4j.connect.support.BotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.api.readonly.ReadOnlyStoreService;
-import discord4j.store.redis.JacksonRedisSerializer;
 import discord4j.store.redis.RedisStoreService;
-import discord4j.store.redis.StoreRedisCodec;
-import discord4j.store.redis.StringSerializer;
 import io.lettuce.core.RedisClient;
-import io.lettuce.core.codec.RedisCodec;
 import reactor.core.publisher.Hooks;
 
 import java.net.InetSocketAddress;
@@ -34,18 +23,6 @@ public class ExampleRSocketWorker {
 
         JacksonResources jackson = new JacksonResources();
         RedisClient redisClient = RedisClient.create("redis://localhost:6379");
-        RedisCodec<String, Object> codec = new StoreRedisCodec<>(new StringSerializer(),
-                new JacksonRedisSerializer(new JacksonResources().getObjectMapper()
-                        .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
-                        .activateDefaultTyping(BasicPolymorphicTypeValidator.builder()
-                                        .allowIfSubType("discord4j.").build(),
-                                ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY)));
-
-        // we need to share the PayloadSource among worker internal DownstreamGatewayClients
-        PayloadSink payloadSink = new RSocketPayloadSink(serverAddress,
-                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound"));
-        PayloadSource payloadSource = new RSocketPayloadSource(serverAddress, "inbound",
-                new RSocketJacksonSourceMapper(jackson.getObjectMapper()));
 
         GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
                 .setJacksonResources(jackson)
@@ -53,8 +30,13 @@ public class ExampleRSocketWorker {
                 .gateway()
                 .setSharding(ShardingStrategy.single()) // required to allow a single downstream reading from all shards
                 .setMemberRequest(false) // recommended, leader makes these requests already
-                .setStoreService(new ReadOnlyStoreService(new RedisStoreService(redisClient, codec))) // read-only
-                .setExtraOptions(o -> new ConnectGatewayOptions(o, payloadSink, payloadSource))
+                .setStoreService(new ReadOnlyStoreService(
+                        new RedisStoreService(redisClient, RedisStoreService.defaultCodec())))
+                .setExtraOptions(o -> new ConnectGatewayOptions(o,
+                        new RSocketPayloadSink(serverAddress,
+                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound")),
+                        new RSocketPayloadSource(serverAddress, "inbound",
+                                new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
                 .connect(DownstreamGatewayClient::new)
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);
