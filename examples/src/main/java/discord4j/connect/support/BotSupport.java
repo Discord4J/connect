@@ -17,6 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * A support class to provide bot message responses.
+ */
 public class BotSupport {
 
     private static final Logger log = Loggers.getLogger(BotSupport.class);

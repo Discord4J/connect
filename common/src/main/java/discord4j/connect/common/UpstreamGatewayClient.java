@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
+
 package discord4j.connect.common;
 
 import discord4j.gateway.DefaultGatewayClient;
@@ -37,6 +38,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.function.Function;
 
+/**
+ * A {@link GatewayClient} implementation that connects to Discord Gateway through {@link DefaultGatewayClient} while
+ * also providing a way to route messages through {@link PayloadSink} and {@link PayloadSource}, capable of delivering
+ * such messages across multiple nodes.
+ */
 public class UpstreamGatewayClient implements GatewayClient {
 
     private static final Logger log = Loggers.getLogger(UpstreamGatewayClient.class);

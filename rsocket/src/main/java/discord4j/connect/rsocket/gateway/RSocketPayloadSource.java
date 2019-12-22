@@ -16,6 +16,10 @@ import reactor.util.Loggers;
 import java.net.InetSocketAddress;
 import java.util.function.Function;
 
+/**
+ * Implementation of {@link PayloadSource} that is capable of connecting to an RSocket server to receive
+ * {@link ConnectPayload} messages.
+ */
 public class RSocketPayloadSource implements PayloadSource {
 
     private static final Logger log = Loggers.getLogger(RSocketPayloadSource.class);

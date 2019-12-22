@@ -6,7 +6,7 @@
     <logger name="org.apache.kafka" level="INFO"/>
     <logger name="io.lettuce" level="INFO"/>
     <logger name="io.rsocket" level="INFO"/>
-    <logger name="discord4j.connect.rsocket.gateway.RSocketShardLeaderServer" level="INFO"/>
+    <logger name="discord4j.connect.rsocket.gateway.RSocketPayloadServer" level="INFO"/>
     <logger name="discord4j.connect.common.DownstreamGatewayClient" level="INFO"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">

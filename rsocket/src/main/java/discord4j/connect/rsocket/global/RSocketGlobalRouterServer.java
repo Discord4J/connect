@@ -17,6 +17,7 @@
 
 package discord4j.connect.rsocket.global;
 
+import discord4j.connect.rsocket.router.RSocketRouterServer;
 import discord4j.connect.rsocket.router.RequestBridge;
 import discord4j.connect.rsocket.router.RequestBridgeStream;
 import discord4j.rest.request.GlobalRateLimiter;
@@ -41,6 +42,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * An RSocket server combining an {@link RSocketGlobalRateLimiterServer} and a {@link RSocketRouterServer}.
+ */
 public class RSocketGlobalRouterServer {
 
     private static final Logger log = Loggers.getLogger(RSocketGlobalRouterServer.class);

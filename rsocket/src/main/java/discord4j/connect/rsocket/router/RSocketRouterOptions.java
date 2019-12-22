@@ -17,6 +17,8 @@
 
 package discord4j.connect.rsocket.router;
 
+import discord4j.connect.rsocket.global.RSocketGlobalRouterServer;
+import discord4j.rest.request.BucketKey;
 import discord4j.rest.request.DiscordWebRequest;
 import discord4j.rest.request.RouterOptions;
 
@@ -24,10 +26,22 @@ import java.net.InetSocketAddress;
 import java.util.Objects;
 import java.util.function.Function;
 
+/**
+ * Additional {@link RouterOptions} to configure an {@link RSocketRouter}.
+ */
 public class RSocketRouterOptions extends RouterOptions {
 
     private final Function<DiscordWebRequest, InetSocketAddress> requestTransportMapper;
 
+    /**
+     * Build a new options instance, based off a parent {@link RouterOptions}.
+     *
+     * @param parent the original options instance
+     * @param requestTransportMapper a mapper to select the proper {@link RSocketRouterServer} or
+     * {@link RSocketGlobalRouterServer} from a given {@link DiscordWebRequest}. Use
+     * {@link BucketKey#of(DiscordWebRequest)} to identify the Discord API bucket a requests belongs and return the
+     * server address.
+     */
     public RSocketRouterOptions(RouterOptions parent,
                                 Function<DiscordWebRequest, InetSocketAddress> requestTransportMapper) {
         super(parent.getToken(),
@@ -39,6 +53,12 @@ public class RSocketRouterOptions extends RouterOptions {
         this.requestTransportMapper = Objects.requireNonNull(requestTransportMapper, "requestTransportMapper");
     }
 
+    /**
+     * Return a mapper from a {@link DiscordWebRequest} to a {@link RSocketRouterServer} or
+     * {@link RSocketGlobalRouterServer} address.
+     *
+     * @return a function to get a server address
+     */
     public Function<DiscordWebRequest, InetSocketAddress> getRequestTransportMapper() {
         return requestTransportMapper;
     }

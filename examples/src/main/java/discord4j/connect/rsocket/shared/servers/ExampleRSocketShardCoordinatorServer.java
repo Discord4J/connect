@@ -15,24 +15,21 @@
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package discord4j.connect.common;
+package discord4j.connect.rsocket.shared.servers;
 
-import org.reactivestreams.Publisher;
+import discord4j.connect.rsocket.shard.RSocketShardCoordinatorServer;
+import discord4j.connect.rsocket.shared.Constants;
 
-/**
- * A function capable of converting a type used by a {@link PayloadSource} implementation into a sequence of
- * {@link ConnectPayload} messages.
- *
- * @param <T> the source type
- */
-@FunctionalInterface
-public interface SourceMapper<T> {
+import java.net.InetSocketAddress;
 
-    /**
-     * Transform a single source into a {@link Publisher} of {@link ConnectPayload} instances.
-     *
-     * @param source the source element provided by a {@link PayloadSource}
-     * @return a reactive sequence of {@link ConnectPayload} messages
-     */
-    Publisher<ConnectPayload> apply(T source);
+public class ExampleRSocketShardCoordinatorServer {
+
+    public static void main(String[] args) {
+        new RSocketShardCoordinatorServer(new InetSocketAddress(Constants.SHARD_COORDINATOR_SERVER_PORT))
+                .start()
+                .blockOptional()
+                .orElseThrow(RuntimeException::new)
+                .onClose()
+                .block();
+    }
 }

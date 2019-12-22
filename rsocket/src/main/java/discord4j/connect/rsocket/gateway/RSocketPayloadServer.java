@@ -19,9 +19,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-public class RSocketShardLeaderServer {
+/**
+ * An RSocket-based payload server, holding queues to process messages from multiple sources.
+ */
+public class RSocketPayloadServer {
 
-    private static final Logger log = Loggers.getLogger(RSocketShardLeaderServer.class);
+    private static final Logger log = Loggers.getLogger(RSocketPayloadServer.class);
 
     private final TcpServerTransport serverTransport;
     private final Function<String, FluxProcessor<Payload, Payload>> processorFactory;
@@ -29,7 +32,7 @@ public class RSocketShardLeaderServer {
     private final Map<String, FluxProcessor<Payload, Payload>> queues = new ConcurrentHashMap<>();
     private final Map<String, FluxSink<Payload>> sinks = new ConcurrentHashMap<>();
 
-    public RSocketShardLeaderServer(InetSocketAddress socketAddress) {
+    public RSocketPayloadServer(InetSocketAddress socketAddress) {
         this(socketAddress, topic -> {
             if (topic.contains("outbound")) {
                 log.info("Creating fanout queue: {}", topic);
@@ -45,8 +48,8 @@ public class RSocketShardLeaderServer {
         });
     }
 
-    public RSocketShardLeaderServer(InetSocketAddress socketAddress, Function<String,
-            FluxProcessor<Payload, Payload>> processorFactory) {
+    public RSocketPayloadServer(InetSocketAddress socketAddress,
+                                Function<String, FluxProcessor<Payload, Payload>> processorFactory) {
         this.serverTransport = TcpServerTransport.create(socketAddress);
         this.processorFactory = processorFactory;
     }

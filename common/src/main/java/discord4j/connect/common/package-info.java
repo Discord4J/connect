@@ -14,6 +14,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
+/**
+ * Core components to implement a distributed Discord4J bot architecture.
+ */
 @NonNullApi
 package discord4j.connect.common;
 

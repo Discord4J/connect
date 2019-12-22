@@ -14,25 +14,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
-
-package discord4j.connect.common;
-
-import org.reactivestreams.Publisher;
-
 /**
- * A function capable of converting a type used by a {@link PayloadSource} implementation into a sequence of
- * {@link ConnectPayload} messages.
- *
- * @param <T> the source type
+ * RSocket-based websocket connection and IDENTIFY rate limit handling for distributed bots.
  */
-@FunctionalInterface
-public interface SourceMapper<T> {
-
-    /**
-     * Transform a single source into a {@link Publisher} of {@link ConnectPayload} instances.
-     *
-     * @param source the source element provided by a {@link PayloadSource}
-     * @return a reactive sequence of {@link ConnectPayload} messages
-     */
-    Publisher<ConnectPayload> apply(T source);
-}
+package discord4j.connect.rsocket.shard;

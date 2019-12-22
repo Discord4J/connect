@@ -20,6 +20,8 @@ package discord4j.connect.rsocket.router;
 import discord4j.common.LogUtil;
 import discord4j.common.ReactorResources;
 import discord4j.connect.common.Discord4JConnectException;
+import discord4j.connect.rsocket.CachedRSocket;
+import discord4j.gateway.retry.ReconnectOptions;
 import discord4j.rest.http.client.ClientException;
 import discord4j.rest.http.client.ClientRequest;
 import discord4j.rest.http.client.ClientResponse;
@@ -28,8 +30,6 @@ import discord4j.rest.request.*;
 import discord4j.rest.response.ResponseFunction;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
-import io.rsocket.RSocketFactory;
-import io.rsocket.transport.netty.client.TcpClientTransport;
 import io.rsocket.util.DefaultPayload;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.UnicastProcessor;
@@ -71,7 +71,7 @@ public class RSocketRouter implements Router {
     private final DiscordWebClient httpClient;
     private final GlobalRateLimiter globalRateLimiter;
     private final Function<DiscordWebRequest, InetSocketAddress> requestTransportMapper;
-    private final Map<InetSocketAddress, Mono<RSocket>> sockets = new ConcurrentHashMap<>();
+    private final Map<InetSocketAddress, CachedRSocket> sockets = new ConcurrentHashMap<>();
     private final Map<BucketKey, BucketRequestExecutor> buckets = new ConcurrentHashMap<>();
 
     public RSocketRouter(RSocketRouterOptions routerOptions) {
@@ -93,8 +93,9 @@ public class RSocketRouter implements Router {
                     String bucket = BucketKey.of(request).toString();
                     BucketRequestExecutor executor = getExecutor(request);
                     InetSocketAddress socketAddress = requestTransportMapper.apply(request);
-                    return Mono.defer(() -> getSocket(socketAddress))
-                            .flatMap(rSocket -> {
+                    CachedRSocket socket = getSocket(socketAddress);
+                    return socket.withSocket(
+                            rSocket -> {
                                 UnicastProcessor<Payload> toLeader = UnicastProcessor.create();
                                 toLeader.onNext(requestPayload(bucket, reqId));
                                 return rSocket.requestChannel(toLeader)
@@ -115,30 +116,14 @@ public class RSocketRouter implements Router {
                                         })
                                         .next();
                             })
-                            .retryWhen(Retry.anyOf(Discord4JConnectException.class)
-                                    .exponentialBackoffWithJitter(Duration.ofSeconds(2), Duration.ofMinutes(1))
-                                    .doOnRetry(rc -> {
-                                        sockets.remove(socketAddress);
-                                        log.info("Reconnecting to server: {}", rc.exception().toString());
-                                    }));
+                            .next();
                 }), reactorResources);
     }
 
-    private Mono<RSocket> getSocket(InetSocketAddress socketAddress) {
-        return sockets.computeIfAbsent(socketAddress, address -> RSocketFactory.connect()
-                .errorConsumer(t -> log.error("Client error: {}", t.toString()))
-                .transport(TcpClientTransport.create(address))
-                .start()
-                .doOnSubscribe(s -> log.debug("Connecting to RSocket server: {}", address))
-                .cache(rSocket -> Duration.ofHours(1), t -> Duration.ZERO, () -> Duration.ZERO))
-                .flatMap(rSocket -> {
-                    if (rSocket.isDisposed()) {
-                        sockets.remove(socketAddress);
-                        return Mono.error(new Discord4JConnectException("Lost connection to leader"));
-                    } else {
-                        return Mono.just(rSocket);
-                    }
-                });
+    private CachedRSocket getSocket(InetSocketAddress socketAddress) {
+        return sockets.computeIfAbsent(socketAddress,
+                address -> new CachedRSocket(socketAddress, ctx -> ctx.exception() instanceof Discord4JConnectException,
+                        ReconnectOptions.create()));
     }
 
     private BucketRequestExecutor getExecutor(DiscordWebRequest request) {
@@ -170,8 +155,9 @@ public class RSocketRouter implements Router {
                     Instant requestTimestamp =
                             Instant.ofEpochMilli(httpResponse.currentContext().get(DiscordWebClient.KEY_REQUEST_TIMESTAMP));
                     Duration responseTime = Duration.between(requestTimestamp, Instant.now());
-                    log.debug(format(httpResponse.currentContext(), "Read {} in {} with headers: {}"),
-                            httpResponse.status(), responseTime, httpResponse.responseHeaders());
+                    LogUtil.traceDebug(log, trace -> format(httpResponse.currentContext(),
+                            "Read " + httpResponse.status() + " in " + responseTime + (!trace ? "" :
+                                    " with headers: " + httpResponse.responseHeaders())));
                 }
                 Duration nextReset = strategy.apply(httpResponse);
                 if (!nextReset.isZero()) {

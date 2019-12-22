@@ -37,6 +37,9 @@ import reactor.util.Loggers;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 
+/**
+ * An RSocket server providing Discord global rate limit handling.
+ */
 public class RSocketGlobalRateLimiterServer {
 
     private static final Logger log = Loggers.getLogger(RSocketGlobalRateLimiterServer.class);

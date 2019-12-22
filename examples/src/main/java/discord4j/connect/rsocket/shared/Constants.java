@@ -15,24 +15,16 @@
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package discord4j.connect.common;
+package discord4j.connect.rsocket.shared;
 
-import org.reactivestreams.Publisher;
+public final class Constants {
 
-/**
- * A function capable of converting a type used by a {@link PayloadSource} implementation into a sequence of
- * {@link ConnectPayload} messages.
- *
- * @param <T> the source type
- */
-@FunctionalInterface
-public interface SourceMapper<T> {
+    // TODO: use env variables?
+    public static int GLOBAL_ROUTER_SERVER_PORT = 33331;
+    public static int SHARD_COORDINATOR_SERVER_PORT = 33332;
+    public static int PAYLOAD_SERVER_PORT = 33333;
+    public static String REDIS_CLIENT_URI = "redis://localhost:6379";
 
-    /**
-     * Transform a single source into a {@link Publisher} of {@link ConnectPayload} instances.
-     *
-     * @param source the source element provided by a {@link PayloadSource}
-     * @return a reactive sequence of {@link ConnectPayload} messages
-     */
-    Publisher<ConnectPayload> apply(T source);
+    private Constants() {
+    }
 }

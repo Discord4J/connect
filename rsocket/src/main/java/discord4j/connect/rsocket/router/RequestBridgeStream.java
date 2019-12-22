@@ -25,6 +25,10 @@ import reactor.util.Loggers;
 
 import java.time.Duration;
 
+/**
+ * Represents a queue of requests for a single Discord API bucket, consumed serially so they can be checked against a
+ * {@link GlobalRateLimiter} and properly delayed in case a rate limit is in place.
+ */
 public class RequestBridgeStream {
 
     private static final Logger log = Loggers.getLogger(RequestBridgeStream.class);

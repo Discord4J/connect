@@ -22,7 +22,17 @@ import reactor.core.publisher.Mono;
 
 import java.util.function.Function;
 
+/**
+ * Reactive receiver for consuming messages.
+ */
 public interface PayloadSource {
 
+    /**
+     * Receive messages and consume them through a given processor.
+     *
+     * @param processor a {@link Function} taking a {@link ConnectPayload} message and processing it, acknowledging
+     * its result through a {@link Mono} response.
+     * @return a {@link Flux} sequence indicating a response
+     */
     Flux<?> receive(Function<ConnectPayload, Mono<Void>> processor);
 }

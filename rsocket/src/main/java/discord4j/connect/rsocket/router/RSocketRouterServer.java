@@ -38,6 +38,10 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * An RSocket server capable of queueing and handling the rate limits of Discord API requests, supporting
+ * {@link RSocketRouter} implementations.
+ */
 public class RSocketRouterServer {
 
     private static final Logger log = Loggers.getLogger(RSocketRouterServer.class);

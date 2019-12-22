@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
+
 package discord4j.connect.common;
 
 import discord4j.gateway.GatewayClient;
@@ -41,6 +42,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
+/**
+ * A {@link GatewayClient} implementation that connects to a {@link PayloadSource} and {@link PayloadSink} to
+ * communicate messages across multiple nodes. This implementation does not establish any connection to Discord
+ * Gateway and does not provide meaningful state about the actual Gateway connection.
+ */
 public class DownstreamGatewayClient implements GatewayClient {
 
     private static final Logger log = Loggers.getLogger(DownstreamGatewayClient.class);

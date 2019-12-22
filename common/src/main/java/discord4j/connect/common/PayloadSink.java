@@ -19,7 +19,16 @@ package discord4j.connect.common;
 
 import reactor.core.publisher.Flux;
 
+/**
+ * Reactive producer that sends from a {@link ConnectPayload} source.
+ */
 public interface PayloadSink {
 
+    /**
+     * Sends a sequence of messages and returns a {@link Flux} for a response.
+     *
+     * @param source sequence of messages to send
+     * @return a {@link Flux} that can be used to signal a response
+     */
     Flux<?> send(Flux<ConnectPayload> source);
 }

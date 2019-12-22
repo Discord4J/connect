@@ -19,6 +19,11 @@ package discord4j.connect.rsocket.router;
 
 import reactor.core.publisher.MonoProcessor;
 
+/**
+ * A container that is capable of signaling both permit acquire and permit release to execute requests.
+ *
+ * @param <T> the type used in the request
+ */
 public class RequestBridge<T> {
 
     private final String request;

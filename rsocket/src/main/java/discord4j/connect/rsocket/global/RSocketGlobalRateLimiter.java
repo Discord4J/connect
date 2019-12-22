@@ -33,6 +33,11 @@ import reactor.util.Loggers;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 
+/**
+ * A {@link GlobalRateLimiter} implementation that is capable to communicate with an
+ * {@link RSocketGlobalRateLimiterServer} or {@link RSocketGlobalRouterServer} to coordinate requests against the
+ * Discord global rate limit.
+ */
 public class RSocketGlobalRateLimiter implements GlobalRateLimiter {
 
     private static final Logger log = Loggers.getLogger(RSocketGlobalRateLimiter.class);
