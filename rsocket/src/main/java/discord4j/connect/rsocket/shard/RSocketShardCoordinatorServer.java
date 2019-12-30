@@ -24,16 +24,14 @@ import io.rsocket.RSocketFactory;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
-import reactor.core.publisher.EmitterProcessor;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RSocketShardCoordinatorServer {
 
@@ -47,52 +45,24 @@ public class RSocketShardCoordinatorServer {
     }
 
     public Mono<CloseableChannel> start() {
-        EmitterProcessor<String> connect = EmitterProcessor.create(false);
-        FluxSink<String> connectSink = connect.sink(FluxSink.OverflowStrategy.DROP);
-        AtomicInteger clients = new AtomicInteger();
-        BucketPool pool = new BucketPool(1, Duration.ofMillis(5500));
+        Map<String, BucketPool> pools = new ConcurrentHashMap<>(1);
         return RSocketFactory.receive()
                 .errorConsumer(t -> log.error("Server error: {}", t.toString()))
                 .acceptor((setup, sendingSocket) -> Mono.just(new AbstractRSocket() {
 
                     @Override
                     public Mono<Payload> requestResponse(Payload payload) {
-                        // acquire for identify
                         String value = payload.getDataUtf8();
-                        log.debug("Server received: {}", value);
+                        log.debug(">: {}", value);
                         if (value.startsWith("identify")) {
-                            return pool.acquire(Duration.parse(value.split(":")[1]))
+                            // identify:shard_limiter_key:response_time
+                            String[] tokens = value.split(":");
+                            BucketPool pool = pools.computeIfAbsent(tokens[1],
+                                    k -> new BucketPool(1, Duration.ofMillis(5500)));
+                            return pool.acquire(Duration.parse(tokens[2]))
                                     .thenReturn(DefaultPayload.create("identify.success"));
-                        } else if (value.startsWith("connect")) {
-                            // notify server that a shard has connected
-                            String metadata = value.split(":")[1];
-                            connectSink.next("connect.success:" + metadata);
-                            return Mono.just(DefaultPayload.create("connect.ack"));
-                        } else if (value.startsWith("disconnect")) {
-                            return Mono.just(DefaultPayload.create("disconnect.ack"));
-                        } else {
-                            return Mono.error(new RuntimeException("Unknown request"));
                         }
-                    }
-
-                    @Override
-                    public Flux<Payload> requestStream(Payload payload) {
-                        // acquire for connect
-                        String value = payload.getDataUtf8();
-                        if (value.startsWith("connect")) {
-                            String metadata = value.split(":")[1];
-                            if (clients.compareAndSet(0, 1)) {
-                                log.debug("First connect stream client");
-                                connectSink.next("connect.success:0:" + metadata);
-                            } else {
-                                log.debug("Connect stream clients: {}", clients.incrementAndGet());
-                            }
-                            return connect.map(str ->
-                                    DefaultPayload.create(str + ":" + (str.contains(":0:") ? "" : metadata)))
-                                    .doOnTerminate(clients::decrementAndGet);
-                        } else {
-                            return Flux.error(new RuntimeException("Unknown request"));
-                        }
+                        return Mono.empty();
                     }
                 }))
                 .transport(serverTransport)

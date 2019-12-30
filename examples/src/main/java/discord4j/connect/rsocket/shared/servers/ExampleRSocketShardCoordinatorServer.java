@@ -19,14 +19,19 @@ package discord4j.connect.rsocket.shared.servers;
 
 import discord4j.connect.rsocket.shard.RSocketShardCoordinatorServer;
 import discord4j.connect.rsocket.shared.Constants;
+import reactor.util.Logger;
+import reactor.util.Loggers;
 
 import java.net.InetSocketAddress;
 
 public class ExampleRSocketShardCoordinatorServer {
 
+    private static final Logger log = Loggers.getLogger(ExampleRSocketShardCoordinatorServer.class);
+
     public static void main(String[] args) {
         new RSocketShardCoordinatorServer(new InetSocketAddress(Constants.SHARD_COORDINATOR_SERVER_PORT))
                 .start()
+                .doOnNext(cc -> log.info("Started shard coordinator server at {}", cc.address()))
                 .blockOptional()
                 .orElseThrow(RuntimeException::new)
                 .onClose()
