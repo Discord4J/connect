@@ -1,6 +1,5 @@
 rootProject.name = 'connect'
 
 include 'common'
-include 'kafka'
 include 'rsocket'
 include 'examples'

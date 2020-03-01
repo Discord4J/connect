@@ -3,7 +3,6 @@
     <logger name="io.netty" level="INFO"/>
     <logger name="reactor" level="INFO"/>
     <logger name="reactor.retry" level="INFO"/>
-    <logger name="org.apache.kafka" level="INFO"/>
     <logger name="io.lettuce" level="INFO"/>
     <logger name="io.rsocket" level="INFO"/>
     <logger name="discord4j.connect.rsocket.gateway.RSocketPayloadServer" level="INFO"/>

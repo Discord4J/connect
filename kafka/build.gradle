@@ -1,6 +1,0 @@
-dependencies {
-    api project(':common')
-    api "io.projectreactor.kafka:reactor-kafka:$reactor_kafka_version"
-
-    implementation "com.discord4j:discord4j-core:$discord4j_core_version"
-}
