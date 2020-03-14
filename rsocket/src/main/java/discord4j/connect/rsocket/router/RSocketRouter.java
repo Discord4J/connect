@@ -21,7 +21,7 @@ import discord4j.common.LogUtil;
 import discord4j.common.ReactorResources;
 import discord4j.connect.common.Discord4JConnectException;
 import discord4j.connect.rsocket.CachedRSocket;
-import discord4j.gateway.retry.ReconnectOptions;
+import discord4j.common.retry.ReconnectOptions;
 import discord4j.rest.http.client.ClientException;
 import discord4j.rest.http.client.ClientRequest;
 import discord4j.rest.http.client.ClientResponse;
