@@ -23,11 +23,11 @@ ext {
         jdk_javadoc = "https://docs.oracle.com/en/java/javase/$jdk/docs/api/".toString()
     }
 
-    discord4j_core_version = '3.1.0-SNAPSHOT'
-    stores_redis_version = '3.1.0-SNAPSHOT'
+    discord4j_core_version = '3.1.0.TEST-SNAPSHOT'
+    stores_redis_version = '3.1.0.TEST-SNAPSHOT'
     rsocket_version = '1.0.0-RC6'
     jsr305_version = '3.0.2'
-    junit_version = '4.12'
+    junit_version = '4.13'
     logback_version = '1.3.0-alpha4'
     blockhound_version = '1.0.2.RELEASE'
 
@@ -55,12 +55,15 @@ allprojects {
     targetCompatibility = project_jdk
 
     repositories {
+        mavenLocal()
         mavenCentral()
-        jcenter()
+        if (!isRelease || isJitpack) {
+            maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
+            maven { url 'https://oss.sonatype.org/content/repositories/staging' }
+        }
         maven { url 'https://jitpack.io' }
-        maven { url 'https://oss.sonatype.org/content/repositories/staging' }
-        maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
         maven { url 'https://repo.spring.io/milestone' }
+        jcenter()
     }
 
     tasks.withType(Javadoc) {
