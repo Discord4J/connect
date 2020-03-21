@@ -90,8 +90,9 @@ public class ExampleRSocketWorker {
                 .gateway()
                 .setSharding(singleStrategy)
                 .setMemberRequest(false)
-                .setStoreService(new ReadOnlyStoreService(
-                        new RedisStoreService(redisClient, RedisStoreService.defaultCodec())))
+                .setStoreService(new ReadOnlyStoreService(RedisStoreService.builder()
+                        .redisClient(redisClient)
+                        .build()))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(payloadServerAddress,
                                 new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound")),

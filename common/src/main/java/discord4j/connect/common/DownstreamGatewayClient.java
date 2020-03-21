@@ -17,14 +17,14 @@
 
 package discord4j.connect.common;
 
+import discord4j.discordjson.json.gateway.Dispatch;
+import discord4j.discordjson.json.gateway.Opcode;
 import discord4j.gateway.GatewayClient;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
 import discord4j.gateway.json.GatewayPayload;
-import discord4j.gateway.json.Opcode;
+import discord4j.gateway.json.ShardAwareDispatch;
 import discord4j.gateway.json.ShardGatewayPayload;
-import discord4j.gateway.json.dispatch.Dispatch;
-import discord4j.gateway.json.dispatch.ShardAwareDispatch;
 import discord4j.gateway.payload.PayloadReader;
 import discord4j.gateway.payload.PayloadWriter;
 import discord4j.gateway.retry.GatewayStateChange;

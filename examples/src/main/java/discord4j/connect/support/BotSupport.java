@@ -7,7 +7,7 @@ import discord4j.core.object.entity.Message;
 import discord4j.core.object.presence.Activity;
 import discord4j.core.object.presence.Presence;
 import discord4j.core.object.util.Snowflake;
-import discord4j.rest.entity.data.ApplicationInfoData;
+import discord4j.discordjson.json.ApplicationInfoData;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
@@ -46,7 +46,8 @@ public class BotSupport {
 
     public static Mono<Void> commandHandler(GatewayDiscordClient client) {
         Mono<Long> ownerId = client.rest().getApplicationInfo()
-                .map(ApplicationInfoData::getOwnerId)
+                .map(ApplicationInfoData::owner)
+                .map(user -> Long.parseUnsignedLong(user.id()))
                 .cache();
 
         List<EventHandler> eventHandlers = new ArrayList<>();

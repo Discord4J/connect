@@ -97,7 +97,9 @@ public class ExampleRSocketLeader {
                 .setSharding(fixedStrategy)
                 .setShardCoordinator(new RSocketShardCoordinator(coordinatorServerAddress))
                 .setGuildSubscriptions(false)
-                .setStoreService(new RedisStoreService(redisClient, RedisStoreService.defaultCodec()))
+                .setStoreService(RedisStoreService.builder()
+                        .redisClient(redisClient)
+                        .build())
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(payloadServerAddress,
                                 new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "inbound")),

@@ -17,12 +17,12 @@
 
 package discord4j.connect.common;
 
+import discord4j.discordjson.json.gateway.Dispatch;
 import discord4j.gateway.DefaultGatewayClient;
 import discord4j.gateway.GatewayClient;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
 import discord4j.gateway.json.GatewayPayload;
-import discord4j.gateway.json.dispatch.Dispatch;
 import discord4j.gateway.payload.PayloadReader;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
