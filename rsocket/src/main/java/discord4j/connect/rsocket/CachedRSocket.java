@@ -1,8 +1,8 @@
 package discord4j.connect.rsocket;
 
-import discord4j.connect.common.Discord4JConnectException;
 import discord4j.common.retry.ReconnectContext;
 import discord4j.common.retry.ReconnectOptions;
+import discord4j.connect.common.Discord4JConnectException;
 import io.rsocket.RSocket;
 import io.rsocket.RSocketFactory;
 import io.rsocket.transport.netty.client.TcpClientTransport;

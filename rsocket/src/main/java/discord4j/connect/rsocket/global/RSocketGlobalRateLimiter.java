@@ -17,9 +17,9 @@
 
 package discord4j.connect.rsocket.global;
 
+import discord4j.common.retry.ReconnectOptions;
 import discord4j.connect.common.Discord4JConnectException;
 import discord4j.connect.rsocket.CachedRSocket;
-import discord4j.common.retry.ReconnectOptions;
 import discord4j.rest.request.GlobalRateLimiter;
 import io.rsocket.Payload;
 import io.rsocket.util.DefaultPayload;

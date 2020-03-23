@@ -17,13 +17,13 @@
 
 package discord4j.connect.rsocket.shard;
 
+import discord4j.common.retry.ReconnectOptions;
 import discord4j.connect.common.Discord4JConnectException;
 import discord4j.connect.rsocket.CachedRSocket;
 import discord4j.core.shard.ShardCoordinator;
 import discord4j.gateway.PayloadTransformer;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
-import discord4j.common.retry.ReconnectOptions;
 import io.rsocket.util.DefaultPayload;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;

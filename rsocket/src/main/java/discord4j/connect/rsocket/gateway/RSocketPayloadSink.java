@@ -1,10 +1,10 @@
 package discord4j.connect.rsocket.gateway;
 
+import discord4j.common.retry.ReconnectOptions;
 import discord4j.connect.common.ConnectPayload;
 import discord4j.connect.common.PayloadSink;
 import discord4j.connect.common.SinkMapper;
 import discord4j.connect.rsocket.CachedRSocket;
-import discord4j.common.retry.ReconnectOptions;
 import io.rsocket.Payload;
 import reactor.core.publisher.Flux;
 import reactor.util.Logger;
