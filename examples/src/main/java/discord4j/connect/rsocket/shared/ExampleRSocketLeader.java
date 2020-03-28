@@ -75,7 +75,7 @@ public class ExampleRSocketLeader {
         ShardingStrategy recommendedStrategy = ShardingStrategy.recommended();
         ShardingStrategy fixedStrategy = ShardingStrategy.fixed(2);
         ShardingStrategy customStrategy = ShardingStrategy.builder()
-                .indexes(0, 2) // only connect this leader to shard IDs 0 and 2
+                .indices(0, 2) // only connect this leader to shard IDs 0 and 2
                 .count(4)      // but still split our bot guilds into 4 shards
                 .build();
 
