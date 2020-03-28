@@ -21,9 +21,9 @@ import discord4j.common.retry.ReconnectOptions;
 import discord4j.connect.common.Discord4JConnectException;
 import discord4j.connect.rsocket.CachedRSocket;
 import discord4j.core.shard.ShardCoordinator;
-import discord4j.gateway.PayloadTransformer;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
+import discord4j.gateway.limiter.PayloadTransformer;
 import io.rsocket.util.DefaultPayload;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
@@ -45,11 +45,11 @@ public class RSocketShardCoordinator implements ShardCoordinator {
     @Override
     public PayloadTransformer getIdentifyLimiter(ShardInfo shardInfo, int shardingFactor) {
         int key = shardInfo.getIndex() % shardingFactor;
-        return sequence -> sequence.flatMap(t2 -> socket.withSocket(rSocket ->
-                rSocket.requestResponse(DefaultPayload.create("identify:" + key + ":" + t2.getT1().getResponseTime().toString()))
+        return (sequence, supplier) -> sequence.flatMap(buf -> socket.withSocket(rSocket ->
+                rSocket.requestResponse(DefaultPayload.create("identify:" + key + ":" + supplier.get().toString()))
                         .onErrorMap(Discord4JConnectException::new)
                         .doOnNext(payload -> log.debug(">: {}", payload.getDataUtf8())))
-                .then(Mono.just(t2.getT2()))
+                .then(Mono.just(buf))
         );
     }
 

@@ -17,7 +17,7 @@
 
 package discord4j.connect.rsocket.shard;
 
-import discord4j.gateway.BucketPool;
+import discord4j.gateway.limiter.BucketPool;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocketFactory;
