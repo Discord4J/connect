@@ -17,7 +17,7 @@
 
 package discord4j.connect.rsocket.shard;
 
-import discord4j.gateway.limiter.BucketPool;
+import discord4j.common.operator.RateLimitOperator;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocketFactory;
@@ -45,7 +45,7 @@ public class RSocketShardCoordinatorServer {
     }
 
     public Mono<CloseableChannel> start() {
-        Map<String, BucketPool> pools = new ConcurrentHashMap<>(1);
+        Map<String, RateLimitOperator<Payload>> limiters = new ConcurrentHashMap<>(1);
         return RSocketFactory.receive()
                 .errorConsumer(t -> log.error("Server error: {}", t.toString()))
                 .acceptor((setup, sendingSocket) -> Mono.just(new AbstractRSocket() {
@@ -56,11 +56,12 @@ public class RSocketShardCoordinatorServer {
                         log.debug(">: {}", value);
                         if (value.startsWith("identify")) {
                             // identify:shard_limiter_key:response_time
+                            // @deprecated response_time (unused)
                             String[] tokens = value.split(":");
-                            BucketPool pool = pools.computeIfAbsent(tokens[1],
-                                    k -> new BucketPool(1, Duration.ofMillis(5500)));
-                            return pool.acquire(Duration.parse(tokens[2]))
-                                    .thenReturn(DefaultPayload.create("identify.success"));
+                            String limiterKey = tokens[1];
+                            RateLimitOperator<Payload> limiter = limiters.computeIfAbsent(limiterKey,
+                                    k -> new RateLimitOperator<>(1, Duration.ofSeconds(6)));
+                            return Mono.just(DefaultPayload.create("identify.success")).transform(limiter);
                         }
                         return Mono.empty();
                     }

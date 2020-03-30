@@ -25,6 +25,7 @@ import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
 import discord4j.gateway.limiter.PayloadTransformer;
 import io.rsocket.util.DefaultPayload;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
@@ -45,12 +46,12 @@ public class RSocketShardCoordinator implements ShardCoordinator {
     @Override
     public PayloadTransformer getIdentifyLimiter(ShardInfo shardInfo, int shardingFactor) {
         int key = shardInfo.getIndex() % shardingFactor;
-        return (sequence, supplier) -> sequence.flatMap(buf -> socket.withSocket(rSocket ->
-                rSocket.requestResponse(DefaultPayload.create("identify:" + key + ":" + supplier.get().toString()))
-                        .onErrorMap(Discord4JConnectException::new)
-                        .doOnNext(payload -> log.debug(">: {}", payload.getDataUtf8())))
-                .then(Mono.just(buf))
-        );
+        return sequence -> Flux.from(sequence)
+                .flatMap(buf -> socket.withSocket(rSocket ->
+                        rSocket.requestResponse(DefaultPayload.create("identify:" + key + ":PT0S"))
+                                .onErrorMap(Discord4JConnectException::new)
+                                .doOnNext(payload -> log.debug(">: {}", payload.getDataUtf8())))
+                        .then(Mono.just(buf)));
     }
 
     @Override

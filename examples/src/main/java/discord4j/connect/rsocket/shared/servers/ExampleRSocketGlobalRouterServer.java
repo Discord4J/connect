@@ -19,7 +19,7 @@ package discord4j.connect.rsocket.shared.servers;
 
 import discord4j.connect.rsocket.global.RSocketGlobalRouterServer;
 import discord4j.connect.rsocket.shared.Constants;
-import discord4j.rest.request.ParallelGlobalRateLimiter;
+import discord4j.rest.request.BucketGlobalRateLimiter;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +41,7 @@ public class ExampleRSocketGlobalRouterServer {
         // the server keeps a GRL locally to coordinate requests across nodes
         RSocketGlobalRouterServer routerServer =
                 new RSocketGlobalRouterServer(new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_PORT),
-                        new ParallelGlobalRateLimiter(12),
-                        Schedulers.parallel());
+                        BucketGlobalRateLimiter.create(), Schedulers.parallel());
 
         // start the server
         routerServer.start()
