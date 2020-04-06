@@ -17,8 +17,13 @@
 package discord4j.connect.rsocket.router;
 
 import discord4j.rest.request.GlobalRateLimiter;
+import discord4j.rest.request.RequestQueue;
+import discord4j.rest.request.RequestQueueFactory;
 import org.reactivestreams.Subscription;
-import reactor.core.publisher.*;
+import reactor.core.publisher.BaseSubscriber;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.MonoProcessor;
+import reactor.core.publisher.SignalType;
 import reactor.core.scheduler.Scheduler;
 import reactor.util.Logger;
 import reactor.util.Loggers;
@@ -33,15 +38,17 @@ public class RequestBridgeStream {
 
     private static final Logger log = Loggers.getLogger(RequestBridgeStream.class);
 
-    private final EmitterProcessor<RequestBridge<Void>> backing = EmitterProcessor.create(false);
     private final String id;
+    private final RequestQueue<RequestBridge<Void>> requestQueue;
     private final GlobalRateLimiter globalRateLimiter;
     private final Scheduler rateLimitScheduler;
 
     private volatile Duration sleepTime = Duration.ZERO;
 
-    public RequestBridgeStream(String id, GlobalRateLimiter globalRateLimiter, Scheduler rateLimitScheduler) {
+    public RequestBridgeStream(String id, GlobalRateLimiter globalRateLimiter, Scheduler rateLimitScheduler,
+                               RequestQueueFactory requestQueueFactory) {
         this.id = id;
+        this.requestQueue = requestQueueFactory.create();
         this.globalRateLimiter = globalRateLimiter;
         this.rateLimitScheduler = rateLimitScheduler;
     }
@@ -50,12 +57,12 @@ public class RequestBridgeStream {
         this.sleepTime = sleepTime;
     }
 
-    public void push(RequestBridge<Void> correlationId) {
-        backing.onNext(correlationId);
+    public void push(RequestBridge<Void> request) {
+        requestQueue.push(request);
     }
 
     public void start() {
-        backing.subscribe(new RequestSubscriber());
+        requestQueue.requests().subscribe(new RequestSubscriber());
     }
 
     private class RequestSubscriber extends BaseSubscriber<RequestBridge<Void>> {

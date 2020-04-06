@@ -21,6 +21,7 @@ import discord4j.connect.rsocket.router.RSocketRouterServer;
 import discord4j.connect.rsocket.router.RequestBridge;
 import discord4j.connect.rsocket.router.RequestBridgeStream;
 import discord4j.rest.request.GlobalRateLimiter;
+import discord4j.rest.request.RequestQueueFactory;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
@@ -61,15 +62,17 @@ public class RSocketGlobalRouterServer {
     private final TcpServerTransport serverTransport;
     private final GlobalRateLimiter delegate;
     private final Scheduler rateLimitScheduler;
+    private final RequestQueueFactory requestQueueFactory;
     private final Map<String, RequestBridgeStream> streams = new ConcurrentHashMap<>();
     private final RequestBridgeStream globalStream;
 
     public RSocketGlobalRouterServer(InetSocketAddress socketAddress, GlobalRateLimiter delegate,
-                                     Scheduler rateLimitScheduler) {
+                                     Scheduler rateLimitScheduler, RequestQueueFactory requestQueueFactory) {
         this.serverTransport = TcpServerTransport.create(socketAddress);
         this.delegate = delegate;
         this.rateLimitScheduler = rateLimitScheduler;
-        this.globalStream = new RequestBridgeStream("global", delegate, rateLimitScheduler);
+        this.requestQueueFactory = requestQueueFactory;
+        this.globalStream = new RequestBridgeStream("global", delegate, rateLimitScheduler, requestQueueFactory);
         this.globalStream.start();
     }
 
@@ -188,12 +191,12 @@ public class RSocketGlobalRouterServer {
     }
 
     enum State {
-        START, ROUTER, GLOBAL_LIMITER;
+        START, ROUTER, GLOBAL_LIMITER
     }
 
     private RequestBridgeStream getStream(String bucket) {
         return streams.computeIfAbsent(bucket, k -> {
-            RequestBridgeStream stream = new RequestBridgeStream(k, delegate, rateLimitScheduler);
+            RequestBridgeStream stream = new RequestBridgeStream(k, delegate, rateLimitScheduler, requestQueueFactory);
             stream.start();
             return stream;
         });

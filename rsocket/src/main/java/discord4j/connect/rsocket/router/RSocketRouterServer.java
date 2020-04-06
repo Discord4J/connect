@@ -18,6 +18,7 @@
 package discord4j.connect.rsocket.router;
 
 import discord4j.rest.request.GlobalRateLimiter;
+import discord4j.rest.request.RequestQueueFactory;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
@@ -53,13 +54,15 @@ public class RSocketRouterServer {
     private final TcpServerTransport serverTransport;
     private final GlobalRateLimiter globalRateLimiter;
     private final Scheduler rateLimitScheduler;
+    private final RequestQueueFactory requestQueueFactory;
     private final Map<String, RequestBridgeStream> streams = new ConcurrentHashMap<>();
 
     public RSocketRouterServer(InetSocketAddress socketAddress, GlobalRateLimiter globalRateLimiter,
-                               Scheduler rateLimitScheduler) {
+                               Scheduler rateLimitScheduler, RequestQueueFactory requestQueueFactory) {
         this.serverTransport = TcpServerTransport.create(socketAddress);
         this.globalRateLimiter = globalRateLimiter;
         this.rateLimitScheduler = rateLimitScheduler;
+        this.requestQueueFactory = requestQueueFactory;
     }
 
     public Mono<CloseableChannel> start() {
@@ -123,7 +126,8 @@ public class RSocketRouterServer {
 
     private RequestBridgeStream getStream(String bucket) {
         return streams.computeIfAbsent(bucket, k -> {
-            RequestBridgeStream stream = new RequestBridgeStream(k, globalRateLimiter, rateLimitScheduler);
+            RequestBridgeStream stream = new RequestBridgeStream(k, globalRateLimiter, rateLimitScheduler,
+                    requestQueueFactory);
             stream.start();
             return stream;
         });

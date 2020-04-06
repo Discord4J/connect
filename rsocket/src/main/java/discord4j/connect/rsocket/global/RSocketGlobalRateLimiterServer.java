@@ -20,6 +20,7 @@ package discord4j.connect.rsocket.global;
 import discord4j.connect.rsocket.router.RequestBridge;
 import discord4j.connect.rsocket.router.RequestBridgeStream;
 import discord4j.rest.request.GlobalRateLimiter;
+import discord4j.rest.request.RequestQueueFactory;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocketFactory;
@@ -54,10 +55,10 @@ public class RSocketGlobalRateLimiterServer {
     private final RequestBridgeStream globalStream;
 
     public RSocketGlobalRateLimiterServer(InetSocketAddress socketAddress, GlobalRateLimiter delegate,
-                                          Scheduler rateLimitScheduler) {
+                                          Scheduler rateLimitScheduler, RequestQueueFactory requestQueueFactory) {
         this.serverTransport = TcpServerTransport.create(socketAddress);
         this.delegate = delegate;
-        this.globalStream = new RequestBridgeStream("global", delegate, rateLimitScheduler);
+        this.globalStream = new RequestBridgeStream("global", delegate, rateLimitScheduler, requestQueueFactory);
         this.globalStream.start();
     }
 
