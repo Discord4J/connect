@@ -13,7 +13,7 @@ public class ExampleSingleWithConnection {
                 .gateway()
                 .setStoreService(new JdkStoreService())
                 .setSharding(ShardingStrategy.fixed(1))
-                .withConnection(client -> BotSupport.create(client).eventHandlers())
+                .withGateway(client -> BotSupport.create(client).eventHandlers())
                 .block();
     }
 }

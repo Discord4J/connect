@@ -105,7 +105,7 @@ public class ExampleRSocketLeader {
                                 new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "inbound")),
                         new RSocketPayloadSource(payloadServerAddress, "outbound",
                                 new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
-                .connect(UpstreamGatewayClient::new)
+                .login(UpstreamGatewayClient::new)
                 .blockOptional()
                 .orElseThrow(RuntimeException::new)
                 .onDisconnect()

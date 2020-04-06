@@ -98,7 +98,7 @@ public class ExampleRSocketWorker {
                                 new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound")),
                         new RSocketPayloadSource(payloadServerAddress, "inbound",
                                 new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
-                .connect(DownstreamGatewayClient::new)
+                .login(DownstreamGatewayClient::new)
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);
 

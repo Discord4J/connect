@@ -14,7 +14,7 @@ public class ExampleSingleConnect {
                 .gateway()
                 .setStoreService(new JdkStoreService())
                 .setSharding(ShardingStrategy.fixed(1))
-                .connect()
+                .login()
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);
 
