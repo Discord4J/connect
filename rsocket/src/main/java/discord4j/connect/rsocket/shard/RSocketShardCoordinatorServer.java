@@ -25,6 +25,7 @@ import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
@@ -60,7 +61,7 @@ public class RSocketShardCoordinatorServer {
                             String[] tokens = value.split(":");
                             String limiterKey = tokens[1];
                             RateLimitOperator<Payload> limiter = limiters.computeIfAbsent(limiterKey,
-                                    k -> new RateLimitOperator<>(1, Duration.ofSeconds(6)));
+                                    k -> new RateLimitOperator<>(1, Duration.ofSeconds(6), Schedulers.parallel()));
                             return Mono.just(DefaultPayload.create("identify.success")).transform(limiter);
                         }
                         return Mono.empty();

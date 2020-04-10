@@ -29,6 +29,7 @@ import discord4j.connect.rsocket.router.RSocketRouter;
 import discord4j.connect.rsocket.router.RSocketRouterOptions;
 import discord4j.connect.rsocket.shard.RSocketShardCoordinator;
 import discord4j.core.DiscordClient;
+import discord4j.core.shard.InvalidationStrategy;
 import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.redis.RedisStoreService;
 import io.lettuce.core.RedisClient;
@@ -88,7 +89,6 @@ public class ExampleRSocketLeader {
         // RSocketPayloadSource: payloads workers send to leaders through the payload server
         // we use UpstreamGatewayClient that is capable of using above components to work in a distributed way
         DiscordClient.builder(System.getenv("token"))
-                .setDebugMode(true)
                 .setJacksonResources(jackson)
                 .setGlobalRateLimiter(new RSocketGlobalRateLimiter(globalRouterServerAddress))
                 .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
@@ -97,6 +97,7 @@ public class ExampleRSocketLeader {
                 .setSharding(fixedStrategy)
                 .setShardCoordinator(new RSocketShardCoordinator(coordinatorServerAddress))
                 .setGuildSubscriptions(false)
+                .setInvalidationStrategy(InvalidationStrategy.disable())
                 .setStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
                         .build())

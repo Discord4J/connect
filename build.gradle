@@ -23,8 +23,8 @@ ext {
         jdk_javadoc = "https://docs.oracle.com/en/java/javase/$jdk/docs/api/".toString()
     }
 
-    discord4j_core_version = '3.1.0.M1'
-    stores_redis_version = '3.1.0.RC1'
+    discord4j_core_version = '3.1.0-SNAPSHOT'
+    stores_redis_version = '3.1.0-SNAPSHOT'
     rsocket_version = '1.0.0-RC6'
     jsr305_version = '3.0.2'
     junit_version = '4.13'

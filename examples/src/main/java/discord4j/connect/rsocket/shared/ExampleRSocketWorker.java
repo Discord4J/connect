@@ -30,6 +30,7 @@ import discord4j.connect.rsocket.router.RSocketRouterOptions;
 import discord4j.connect.support.BotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
+import discord4j.core.shard.InvalidationStrategy;
 import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.api.readonly.ReadOnlyStoreService;
 import discord4j.store.redis.RedisStoreService;
@@ -82,7 +83,6 @@ public class ExampleRSocketWorker {
         // RSocketPayloadSource: payloads leaders send to workers through the payload server
         // we use DownstreamGatewayClient that is capable of using above components to work in a distributed way
         GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
-                .setDebugMode(true)
                 .setJacksonResources(jackson)
                 .setGlobalRateLimiter(new RSocketGlobalRateLimiter(globalRouterServerAddress))
                 .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
@@ -90,6 +90,7 @@ public class ExampleRSocketWorker {
                 .gateway()
                 .setSharding(singleStrategy)
                 .setMemberRequest(false)
+                .setInvalidationStrategy(InvalidationStrategy.disable())
                 .setStoreService(new ReadOnlyStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
                         .build()))
