@@ -18,8 +18,7 @@
 package discord4j.connect.rsocket.shard;
 
 import discord4j.common.retry.ReconnectOptions;
-import discord4j.connect.common.Discord4JConnectException;
-import discord4j.connect.rsocket.CachedRSocket;
+import discord4j.connect.rsocket.ConnectRSocket;
 import discord4j.core.shard.ShardCoordinator;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
@@ -36,11 +35,10 @@ public class RSocketShardCoordinator implements ShardCoordinator {
 
     private static final Logger log = Loggers.getLogger(RSocketShardCoordinator.class);
 
-    private final CachedRSocket socket;
+    private final ConnectRSocket socket;
 
     public RSocketShardCoordinator(InetSocketAddress socketAddress) {
-        this.socket = new CachedRSocket(socketAddress, ctx -> ctx.exception() instanceof Discord4JConnectException,
-                ReconnectOptions.create());
+        this.socket = new ConnectRSocket("coordinator", socketAddress, ctx -> true, ReconnectOptions.create());
     }
 
     @Override
@@ -49,7 +47,6 @@ public class RSocketShardCoordinator implements ShardCoordinator {
         return sequence -> Flux.from(sequence)
                 .flatMap(buf -> socket.withSocket(rSocket ->
                         rSocket.requestResponse(DefaultPayload.create("identify:" + key + ":PT0S"))
-                                .onErrorMap(Discord4JConnectException::new)
                                 .doOnNext(payload -> log.debug(">: {}", payload.getDataUtf8())))
                         .then(Mono.just(buf)));
     }

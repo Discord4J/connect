@@ -19,7 +19,7 @@ package discord4j.connect.rsocket.global;
 
 import discord4j.common.retry.ReconnectOptions;
 import discord4j.connect.common.Discord4JConnectException;
-import discord4j.connect.rsocket.CachedRSocket;
+import discord4j.connect.rsocket.ConnectRSocket;
 import discord4j.rest.request.GlobalRateLimiter;
 import io.rsocket.Payload;
 import io.rsocket.util.DefaultPayload;
@@ -47,11 +47,10 @@ public class RSocketGlobalRateLimiter implements GlobalRateLimiter {
     private static final String LIMIT_GLOBAL = "LIMIT:global";
     private static final String LIMIT_QUERY = "QUERY:global";
 
-    private final CachedRSocket socket;
+    private final ConnectRSocket socket;
 
     public RSocketGlobalRateLimiter(InetSocketAddress socketAddress) {
-        this.socket = new CachedRSocket(socketAddress, ctx -> ctx.exception() instanceof Discord4JConnectException,
-                ReconnectOptions.create());
+        this.socket = new ConnectRSocket("grl", socketAddress, ctx -> true, ReconnectOptions.create());
     }
 
     @Override

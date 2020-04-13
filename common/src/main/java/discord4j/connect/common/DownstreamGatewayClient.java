@@ -50,6 +50,8 @@ import java.util.function.Function;
 public class DownstreamGatewayClient implements GatewayClient {
 
     private static final Logger log = Loggers.getLogger(DownstreamGatewayClient.class);
+    private static final Logger senderLog = Loggers.getLogger("discord4j.gateway.protocol.sender");
+    private static final Logger receiverLog = Loggers.getLogger("discord4j.gateway.protocol.receiver");
 
     private final EmitterProcessor<Dispatch> dispatch = EmitterProcessor.create(false);
     private final EmitterProcessor<GatewayPayload<?>> receiver = EmitterProcessor.create(false);
@@ -100,7 +102,7 @@ public class DownstreamGatewayClient implements GatewayClient {
                         sessionId.set(inPayload.getSession().getId());
                         shardCount.set(inPayload.getShard().getCount());
 
-                        log.trace("<< {}", inPayload);
+                        logPayload(receiverLog, inPayload);
 
                         return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(inPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
                                 .map(payload -> new ShardGatewayPayload<>(payload, inPayload.getShard().getIndex()))
@@ -119,7 +121,7 @@ public class DownstreamGatewayClient implements GatewayClient {
                             .map(buf -> buf.toString(StandardCharsets.UTF_8))
                             .map(str -> {
                                 ConnectPayload cp = new ConnectPayload(getShardInfo(payload), getSessionInfo(), str);
-                                log.trace(">> {}", cp);
+                                logPayload(senderLog, cp);
                                 return cp;
                             })))
                             .subscribeOn(Schedulers.newSingle("payload-sender"))
@@ -134,6 +136,12 @@ public class DownstreamGatewayClient implements GatewayClient {
                     .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
                     .then();
         });
+    }
+
+    private void logPayload(Logger logger, ConnectPayload payload) {
+        if (logger.isTraceEnabled()) {
+            logger.trace(payload.toString().replaceAll("(\"token\": ?\")([A-Za-z0-9._-]*)(\")", "$1hunter2$3"));
+        }
     }
 
     private ShardInfo getShardInfo(GatewayPayload<?> payload) {

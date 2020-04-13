@@ -4,7 +4,7 @@ import discord4j.common.retry.ReconnectOptions;
 import discord4j.connect.common.ConnectPayload;
 import discord4j.connect.common.PayloadSource;
 import discord4j.connect.common.SourceMapper;
-import discord4j.connect.rsocket.CachedRSocket;
+import discord4j.connect.rsocket.ConnectRSocket;
 import io.rsocket.Payload;
 import io.rsocket.util.DefaultPayload;
 import reactor.core.publisher.Flux;
@@ -28,7 +28,7 @@ public class RSocketPayloadSource implements PayloadSource {
     private final Flux<Payload> inbound;
 
     public RSocketPayloadSource(InetSocketAddress serverAddress, String topic, SourceMapper<Payload> mapper) {
-        CachedRSocket socket = new CachedRSocket(serverAddress, ctx -> true, ReconnectOptions.create());
+        ConnectRSocket socket = new ConnectRSocket("pl-source", serverAddress, ctx -> true, ReconnectOptions.create());
         this.mapper = mapper;
         this.inbound = socket.withSocket(
                 rSocket -> {

@@ -21,7 +21,7 @@ import discord4j.common.LogUtil;
 import discord4j.common.ReactorResources;
 import discord4j.common.retry.ReconnectOptions;
 import discord4j.connect.common.Discord4JConnectException;
-import discord4j.connect.rsocket.CachedRSocket;
+import discord4j.connect.rsocket.ConnectRSocket;
 import discord4j.rest.http.client.ClientException;
 import discord4j.rest.http.client.ClientRequest;
 import discord4j.rest.http.client.ClientResponse;
@@ -39,6 +39,7 @@ import reactor.retry.Retry;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.context.Context;
+import reactor.util.retry.RetryBackoffSpec;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -71,8 +72,9 @@ public class RSocketRouter implements Router {
     private final DiscordWebClient httpClient;
     private final GlobalRateLimiter globalRateLimiter;
     private final Function<DiscordWebRequest, InetSocketAddress> requestTransportMapper;
-    private final Map<InetSocketAddress, CachedRSocket> sockets = new ConcurrentHashMap<>();
+    private final Map<InetSocketAddress, ConnectRSocket> sockets = new ConcurrentHashMap<>();
     private final Map<BucketKey, BucketRequestExecutor> buckets = new ConcurrentHashMap<>();
+    private final RetryBackoffSpec retrySpec;
 
     public RSocketRouter(RSocketRouterOptions routerOptions) {
         this.reactorResources = Objects.requireNonNull(routerOptions.getReactorResources(), "reactorResources");
@@ -82,6 +84,11 @@ public class RSocketRouter implements Router {
         this.globalRateLimiter = Objects.requireNonNull(routerOptions.getGlobalRateLimiter(), "globalRateLimiter");
         this.requestTransportMapper = Objects.requireNonNull(routerOptions.getRequestTransportMapper(),
                 "requestTransportMapper");
+        ReconnectOptions reconnectOptions = ReconnectOptions.create();
+        this.retrySpec = reactor.util.retry.Retry.backoff(reconnectOptions.getMaxRetries(), reconnectOptions.getFirstBackoff())
+                .maxBackoff(reconnectOptions.getMaxBackoffInterval())
+                .scheduler(reconnectOptions.getBackoffScheduler())
+                .transientErrors(true);
     }
 
     @Override
@@ -93,7 +100,7 @@ public class RSocketRouter implements Router {
                     String bucket = BucketKey.of(request).toString();
                     BucketRequestExecutor executor = getExecutor(request);
                     InetSocketAddress socketAddress = requestTransportMapper.apply(request);
-                    CachedRSocket socket = getSocket(socketAddress);
+                    ConnectRSocket socket = getSocket(socketAddress);
                     return socket.withSocket(
                             rSocket -> {
                                 UnicastProcessor<Payload> toLeader = UnicastProcessor.create();
@@ -116,14 +123,17 @@ public class RSocketRouter implements Router {
                                         })
                                         .next();
                             })
+                            .retryWhen(retrySpec.doBeforeRetry(signal ->
+                                    log.info("[{}] Retrying router connection (attempt {}): {}",
+                                            Integer.toHexString(hashCode()), signal.totalRetriesInARow() + 1,
+                                            signal.failure().toString())))
                             .next();
                 }), reactorResources);
     }
 
-    private CachedRSocket getSocket(InetSocketAddress socketAddress) {
+    private ConnectRSocket getSocket(InetSocketAddress socketAddress) {
         return sockets.computeIfAbsent(socketAddress,
-                address -> new CachedRSocket(socketAddress, ctx -> ctx.exception() instanceof Discord4JConnectException,
-                        ReconnectOptions.create()));
+                address -> new ConnectRSocket("router", socketAddress, ctx -> true, ReconnectOptions.create()));
     }
 
     private BucketRequestExecutor getExecutor(DiscordWebRequest request) {

@@ -25,17 +25,13 @@ ext {
 
     discord4j_core_version = '3.1.0-SNAPSHOT'
     stores_redis_version = '3.1.0-SNAPSHOT'
-    rsocket_version = '1.0.0-RC6'
+    rsocket_version = '1.0.0-RC7-SNAPSHOT'
     jsr305_version = '3.0.2'
     junit_version = '4.13'
     logback_version = '1.3.0-alpha4'
 
     isJitpack = "true" == System.getenv("JITPACK")
     isRelease = !version.toString().endsWith('-SNAPSHOT')
-}
-
-configurations.all {
-    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
 }
 
 allprojects {
@@ -58,10 +54,15 @@ allprojects {
         if (!isRelease || isJitpack) {
             maven { url 'https://oss.sonatype.org/content/repositories/snapshots' }
             maven { url 'https://oss.sonatype.org/content/repositories/staging' }
+            maven { url 'https://oss.jfrog.org/artifactory/oss-snapshot-local' }
         }
         maven { url 'https://jitpack.io' }
         maven { url 'https://repo.spring.io/milestone' }
         jcenter()
+    }
+
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 600, 'seconds'
     }
 
     tasks.withType(Javadoc) {

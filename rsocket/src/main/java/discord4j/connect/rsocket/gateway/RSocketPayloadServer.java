@@ -81,6 +81,7 @@ public class RSocketPayloadServer {
                         .switchOnFirst((signal, flux) -> {
                             if (signal.hasValue()) {
                                 Payload first = signal.get();
+                                assert first != null;
                                 String[] command = getCommand(first);
                                 String key = command[0];
                                 String topic = command[1];
