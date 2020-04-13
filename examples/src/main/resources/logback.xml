@@ -5,8 +5,10 @@
     <logger name="reactor.retry" level="INFO"/>
     <logger name="io.lettuce" level="INFO"/>
     <logger name="io.rsocket" level="INFO"/>
-    <logger name="discord4j.connect.rsocket.gateway.RSocketPayloadServer" level="INFO"/>
+    <logger name="discord4j.connect.rsocket.gateway.RSocketPayloadServer" level="DEBUG"/>
     <logger name="discord4j.connect.common.DownstreamGatewayClient" level="INFO"/>
+<!--    <logger name="discord4j.gateway.protocol.sender" level="TRACE"/>-->
+<!--    <logger name="discord4j.gateway.protocol.receiver" level="TRACE"/>-->
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>

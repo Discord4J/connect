@@ -31,7 +31,7 @@ public class ConnectGatewayOptions extends GatewayOptions {
     public ConnectGatewayOptions(GatewayOptions parent, PayloadSink payloadSink, PayloadSource payloadSource) {
         super(parent.getToken(), parent.getReactorResources(), parent.getPayloadReader(), parent.getPayloadWriter(),
                 parent.getReconnectOptions(), parent.getIdentifyOptions(), parent.getInitialObserver(),
-                parent.getIdentifyLimiter());
+                parent.getIdentifyLimiter(), parent.getMaxMissedHeartbeatAck());
         this.payloadSink = payloadSink;
         this.payloadSource = payloadSource;
     }

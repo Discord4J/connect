@@ -27,10 +27,9 @@ import discord4j.connect.rsocket.gateway.RSocketPayloadSource;
 import discord4j.connect.rsocket.global.RSocketGlobalRateLimiter;
 import discord4j.connect.rsocket.router.RSocketRouter;
 import discord4j.connect.rsocket.router.RSocketRouterOptions;
-import discord4j.connect.support.BotSupport;
+import discord4j.connect.support.NoBotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
-import discord4j.core.shard.InvalidationStrategy;
 import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.api.readonly.ReadOnlyStoreService;
 import discord4j.store.redis.RedisStoreService;
@@ -90,7 +89,6 @@ public class ExampleRSocketWorker {
                 .gateway()
                 .setSharding(singleStrategy)
                 .setMemberRequest(false)
-                .setInvalidationStrategy(InvalidationStrategy.disable())
                 .setStoreService(new ReadOnlyStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
                         .build()))
@@ -103,7 +101,7 @@ public class ExampleRSocketWorker {
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);
 
-        BotSupport.create(client)
+        NoBotSupport.create(client)
                 .eventHandlers()
                 .block();
     }

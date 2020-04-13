@@ -4,9 +4,11 @@ import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.domain.lifecycle.ReadyEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Message;
-import discord4j.core.object.presence.Activity;
+import discord4j.core.object.entity.User;
 import discord4j.core.object.presence.Presence;
 import discord4j.discordjson.json.ApplicationInfoData;
+import discord4j.discordjson.json.ImmutableMessageCreateRequest;
+import discord4j.discordjson.possible.Possible;
 import discord4j.rest.util.Snowflake;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -17,9 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * A support class to provide bot message responses.
- */
 public class BotSupport {
 
     private static final Logger log = Loggers.getLogger(BotSupport.class);
@@ -47,25 +46,28 @@ public class BotSupport {
     public static Mono<Void> commandHandler(GatewayDiscordClient client) {
         Mono<Long> ownerId = client.rest().getApplicationInfo()
                 .map(ApplicationInfoData::owner)
-                .map(user -> Long.parseUnsignedLong(user.id()))
+                .map(user -> Snowflake.asLong(user.id()))
                 .cache();
 
         List<EventHandler> eventHandlers = new ArrayList<>();
         eventHandlers.add(new Echo());
         eventHandlers.add(new Status());
         eventHandlers.add(new StatusEmbed());
+        eventHandlers.add(new Exit());
 
-        return client.on(MessageCreateEvent.class, event -> ownerId
-                .filter(owner -> {
-                    Long author = event.getMessage().getAuthor()
-                            .map(u -> u.getId().asLong())
-                            .orElse(null);
-                    return owner.equals(author);
-                })
-                .flatMap(id -> Mono.when(eventHandlers.stream()
-                        .map(handler -> handler.onMessageCreate(event))
-                        .collect(Collectors.toList()))
-                ))
+        return client.on(MessageCreateEvent.class,
+                event -> ownerId.filter(
+                        owner -> {
+                            Long author = event.getMessage().getAuthor()
+                                    .map(User::getId)
+                                    .map(Snowflake::asLong)
+                                    .orElse(null);
+                            return owner.equals(author);
+                        })
+                        .flatMap(id -> Mono.when(eventHandlers.stream()
+                                .map(handler -> handler.onMessageCreate(event))
+                                .collect(Collectors.toList()))
+                        ))
                 .then();
     }
 
@@ -74,12 +76,15 @@ public class BotSupport {
         @Override
         public Mono<Void> onMessageCreate(MessageCreateEvent event) {
             Message message = event.getMessage();
-            return Mono.justOrEmpty(message.getContent())
-                    .filter(content -> content.startsWith("!echo "))
-                    .map(content -> content.substring("!echo ".length()))
-                    .flatMap(source -> message.getChannel()
-                            .flatMap(channel -> channel.createMessage(source)))
-                    .then();
+            String content = message.getContent();
+            if (content.startsWith("!echo ")) {
+                return message.getRestChannel().createMessage(
+                        ImmutableMessageCreateRequest.builder()
+                                .content(Possible.of("<@" + message.getUserData().id() + "> " + content.substring("!echo ".length())))
+                                .build())
+                        .then();
+            }
+            return Mono.empty();
         }
     }
 
@@ -97,8 +102,6 @@ public class BotSupport {
                                         .blockOptional()
                                         .orElseThrow(RuntimeException::new)
                                         .getAvatarUrl());
-                                spec.addField("Self ID", event.getClient().getSelfId().blockOptional()
-                                        .orElse(Snowflake.of(0L)).asString(), false);
                                 spec.addField("Servers", event.getClient().getGuilds().count()
                                         .blockOptional()
                                         .orElse(-1L)
@@ -116,18 +119,17 @@ public class BotSupport {
             return Mono.justOrEmpty(message.getContent())
                     .filter(content -> content.startsWith("!status "))
                     .map(content -> {
-                        String[] tokens = content.split(" ");
-                        String status = tokens.length > 1 ? tokens[1] : "";
-                        String activity = tokens.length > 2 ? tokens[2] : null;
+                        String status = content.substring("!status ".length());
                         if (status.equalsIgnoreCase("online")) {
-                            return activity != null ? Presence.online(Activity.playing(activity)) : Presence.online();
-                        } else if (status.equalsIgnoreCase("dnd")) {
-                            return activity != null ? Presence.doNotDisturb(
-                                    Activity.playing(activity)) : Presence.doNotDisturb();
-                        } else if (status.equalsIgnoreCase("idle")) {
-                            return activity != null ? Presence.idle(Activity.playing(activity)) : Presence.idle();
-                        } else {
                             return Presence.online();
+                        } else if (status.equalsIgnoreCase("dnd")) {
+                            return Presence.doNotDisturb();
+                        } else if (status.equalsIgnoreCase("idle")) {
+                            return Presence.idle();
+                        } else if (status.equalsIgnoreCase("invisible")) {
+                            return Presence.invisible();
+                        } else {
+                            throw new IllegalArgumentException("Invalid argument");
                         }
                     })
                     .flatMap(presence -> event.getClient().updatePresence(presence))
@@ -135,8 +137,15 @@ public class BotSupport {
         }
     }
 
-    public abstract static class EventHandler {
+    public static class Exit extends EventHandler {
 
-        public abstract Mono<Void> onMessageCreate(MessageCreateEvent event);
+        @Override
+        public Mono<Void> onMessageCreate(MessageCreateEvent event) {
+            Message message = event.getMessage();
+            return Mono.justOrEmpty(message.getContent())
+                    .filter(content -> content.equals("!exit"))
+                    .flatMap(presence -> event.getClient().logout())
+                    .then();
+        }
     }
 }

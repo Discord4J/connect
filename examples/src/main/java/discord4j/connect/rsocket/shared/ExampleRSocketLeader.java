@@ -29,10 +29,19 @@ import discord4j.connect.rsocket.router.RSocketRouter;
 import discord4j.connect.rsocket.router.RSocketRouterOptions;
 import discord4j.connect.rsocket.shard.RSocketShardCoordinator;
 import discord4j.core.DiscordClient;
+import discord4j.core.GatewayDiscordClient;
+import discord4j.core.event.dispatch.DispatchEventMapper;
+import discord4j.core.object.presence.Presence;
 import discord4j.core.shard.InvalidationStrategy;
 import discord4j.core.shard.ShardingStrategy;
+import discord4j.gateway.intent.Intent;
+import discord4j.gateway.intent.IntentSet;
 import discord4j.store.redis.RedisStoreService;
 import io.lettuce.core.RedisClient;
+import reactor.core.publisher.Mono;
+import reactor.netty.http.server.HttpServer;
+import reactor.util.Logger;
+import reactor.util.Loggers;
 
 import java.net.InetSocketAddress;
 
@@ -88,19 +97,25 @@ public class ExampleRSocketLeader {
         // RSocketPayloadSink: payloads leaders send to workers through the payload server
         // RSocketPayloadSource: payloads workers send to leaders through the payload server
         // we use UpstreamGatewayClient that is capable of using above components to work in a distributed way
-        DiscordClient.builder(System.getenv("token"))
+        GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
                 .setJacksonResources(jackson)
                 .setGlobalRateLimiter(new RSocketGlobalRateLimiter(globalRouterServerAddress))
                 .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
                 .build(RSocketRouter::new)
                 .gateway()
-                .setSharding(fixedStrategy)
+                .setSharding(recommendedStrategy)
                 .setShardCoordinator(new RSocketShardCoordinator(coordinatorServerAddress))
-                .setGuildSubscriptions(false)
+                .setDisabledIntents(IntentSet.of(
+                        Intent.GUILD_PRESENCES,
+                        Intent.GUILD_MESSAGE_TYPING,
+                        Intent.DIRECT_MESSAGE_TYPING))
+                .setInitialStatus(s -> Presence.invisible())
                 .setInvalidationStrategy(InvalidationStrategy.disable())
                 .setStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
+                        .useSharedConnection(false)
                         .build())
+                .setDispatchEventMapper(DispatchEventMapper.discardEvents())
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(payloadServerAddress,
                                 new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "inbound")),
@@ -108,8 +123,33 @@ public class ExampleRSocketLeader {
                                 new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
                 .login(UpstreamGatewayClient::new)
                 .blockOptional()
-                .orElseThrow(RuntimeException::new)
-                .onDisconnect()
-                .block();
+                .orElseThrow(RuntimeException::new);
+
+        // Proof of concept allowing leader management via API
+        HttpServer.create()
+                .port(0) // use an ephemeral port
+                .route(routes -> routes
+                        .get("/logout",
+                                (req, res) -> {
+                                    return client.logout()
+                                            .then(Mono.from(res.addHeader("content-type", "application/json")
+                                                    .status(200)
+                                                    .chunkedTransfer(false)
+                                                    .sendString(Mono.just("OK"))));
+                                })
+                )
+                .bind()
+                .doOnNext(facade -> {
+                    log.info("*************************************************************");
+                    log.info("Server started at {}:{}", facade.host(), facade.port());
+                    log.info("*************************************************************");
+                    // kill the server on JVM exit
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> facade.disposeNow()));
+                })
+                .subscribe();
+
+        client.onDisconnect().block();
     }
+
+    private static final Logger log = Loggers.getLogger(ExampleRSocketLeader.class);
 }
