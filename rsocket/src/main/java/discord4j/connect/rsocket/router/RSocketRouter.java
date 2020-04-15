@@ -39,7 +39,6 @@ import reactor.retry.Retry;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.context.Context;
-import reactor.util.retry.RetryBackoffSpec;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -74,7 +73,6 @@ public class RSocketRouter implements Router {
     private final Function<DiscordWebRequest, InetSocketAddress> requestTransportMapper;
     private final Map<InetSocketAddress, ConnectRSocket> sockets = new ConcurrentHashMap<>();
     private final Map<BucketKey, BucketRequestExecutor> buckets = new ConcurrentHashMap<>();
-    private final RetryBackoffSpec retrySpec;
 
     public RSocketRouter(RSocketRouterOptions routerOptions) {
         this.reactorResources = Objects.requireNonNull(routerOptions.getReactorResources(), "reactorResources");
@@ -84,11 +82,6 @@ public class RSocketRouter implements Router {
         this.globalRateLimiter = Objects.requireNonNull(routerOptions.getGlobalRateLimiter(), "globalRateLimiter");
         this.requestTransportMapper = Objects.requireNonNull(routerOptions.getRequestTransportMapper(),
                 "requestTransportMapper");
-        ReconnectOptions reconnectOptions = ReconnectOptions.create();
-        this.retrySpec = reactor.util.retry.Retry.backoff(reconnectOptions.getMaxRetries(), reconnectOptions.getFirstBackoff())
-                .maxBackoff(reconnectOptions.getMaxBackoffInterval())
-                .scheduler(reconnectOptions.getBackoffScheduler())
-                .transientErrors(true);
     }
 
     @Override
@@ -123,10 +116,6 @@ public class RSocketRouter implements Router {
                                         })
                                         .next();
                             })
-                            .retryWhen(retrySpec.doBeforeRetry(signal ->
-                                    log.info("[{}] Retrying router connection (attempt {}): {}",
-                                            Integer.toHexString(hashCode()), signal.totalRetriesInARow() + 1,
-                                            signal.failure().toString())))
                             .next();
                 }), reactorResources);
     }
