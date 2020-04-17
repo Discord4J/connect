@@ -28,6 +28,10 @@ public class ConnectRabbitMQ {
         );
     }
 
+    public ConnectRabbitMQ(final ConnectRabbitMQSettings settings) {
+        this(settings.getSenderOptions(), settings.getReceiverOptions());
+    }
+
     public Flux<OutboundMessageResult> sendMany(final String queue, final Flux<byte[]> data) {
         return sender.sendWithPublishConfirms(data.map(it -> new OutboundMessage("", queue, it)));
     }

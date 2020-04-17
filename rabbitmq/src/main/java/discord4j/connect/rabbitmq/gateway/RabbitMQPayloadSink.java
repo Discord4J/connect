@@ -1,10 +1,10 @@
 package discord4j.connect.rabbitmq.gateway;
 
-import com.rabbitmq.client.Address;
 import discord4j.connect.common.ConnectPayload;
 import discord4j.connect.common.PayloadSink;
 import discord4j.connect.common.SinkMapper;
 import discord4j.connect.rabbitmq.ConnectRabbitMQ;
+import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
 import reactor.core.publisher.Flux;
 import reactor.util.Logger;
 import reactor.util.Loggers;
@@ -17,8 +17,8 @@ public class RabbitMQPayloadSink implements PayloadSink {
     private final SinkMapper<byte[]> mapper;
     private final String queue;
 
-    public RabbitMQPayloadSink(final String queue, final SinkMapper<byte[]> mapper, final Address... clusterIps) {
-        this.rabbitMQ = new ConnectRabbitMQ(clusterIps);
+    public RabbitMQPayloadSink(final String queue, final SinkMapper<byte[]> mapper, final ConnectRabbitMQSettings settings) {
+        this.rabbitMQ = new ConnectRabbitMQ(settings);
         this.queue = queue;
         this.mapper = mapper;
     }

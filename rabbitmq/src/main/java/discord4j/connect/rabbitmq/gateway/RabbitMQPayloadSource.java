@@ -6,6 +6,7 @@ import discord4j.connect.common.ConnectPayload;
 import discord4j.connect.common.PayloadSource;
 import discord4j.connect.common.SourceMapper;
 import discord4j.connect.rabbitmq.ConnectRabbitMQ;
+import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.Logger;
@@ -20,8 +21,8 @@ public class RabbitMQPayloadSource implements PayloadSource {
     private final SourceMapper<byte[]> mapper;
     private final Flux<byte[]> inbound;
 
-    public RabbitMQPayloadSource(final String queue, final SourceMapper<byte[]> mapper, final Address... clusterIps) {
-        final ConnectRabbitMQ rabbitMQ = new ConnectRabbitMQ(clusterIps);
+    public RabbitMQPayloadSource(final String queue, final SourceMapper<byte[]> mapper, final ConnectRabbitMQSettings settings) {
+        final ConnectRabbitMQ rabbitMQ = new ConnectRabbitMQ(settings);
         this.mapper = mapper;
         this.inbound = rabbitMQ.consume(queue)
             .map(Delivery::getBody)
