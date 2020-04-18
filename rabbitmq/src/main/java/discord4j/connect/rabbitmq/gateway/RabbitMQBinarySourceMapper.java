@@ -23,17 +23,18 @@ public class RabbitMQBinarySourceMapper implements SourceMapper<byte[]> {
     @Override
     public Publisher<ConnectPayload> apply(byte[] source) {
         return Mono.fromCallable(() -> {
-            final DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(source));
-            final int shardCount = dataInputStream.readInt();
-            final int shardIndex = dataInputStream.readInt();
-            final int sessionSeq = dataInputStream.readInt();
-            final String sessionId = dataInputStream.readUTF();
-            final String payload = dataInputStream.readUTF();
-            return new ConnectPayload(
-                new ShardInfo(shardIndex, shardCount),
-                new SessionInfo(sessionId, sessionSeq),
-                payload
-            );
+            try (final DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(source))) {
+                final int shardCount = dataInputStream.readInt();
+                final int shardIndex = dataInputStream.readInt();
+                final int sessionSeq = dataInputStream.readInt();
+                final String sessionId = dataInputStream.readUTF();
+                final String payload = dataInputStream.readUTF();
+                return new ConnectPayload(
+                    new ShardInfo(shardIndex, shardCount),
+                    new SessionInfo(sessionId, sessionSeq),
+                    payload
+                );
+            }
         });
     }
 }

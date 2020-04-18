@@ -21,14 +21,16 @@ public class RabbitMQBinarySinkMapper implements SinkMapper<byte[]> {
     @Override
     public Publisher<byte[]> apply(ConnectPayload payload) {
         return Mono.fromCallable(() -> {
-            final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            final DataOutputStream outputStream = new DataOutputStream(byteArrayOutputStream);
-            outputStream.writeInt(payload.getShard().getCount());
-            outputStream.writeInt(payload.getShard().getIndex());
-            outputStream.writeInt(payload.getSession().getSequence());
-            outputStream.writeUTF(payload.getSession().getId());
-            outputStream.writeUTF(payload.getPayload());
-            return byteArrayOutputStream.toByteArray();
+            try(final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream()) {
+                try(final DataOutputStream outputStream = new DataOutputStream(byteArrayOutputStream)) {
+                    outputStream.writeInt(payload.getShard().getCount());
+                    outputStream.writeInt(payload.getShard().getIndex());
+                    outputStream.writeInt(payload.getSession().getSequence());
+                    outputStream.writeUTF(payload.getSession().getId());
+                    outputStream.writeUTF(payload.getPayload());
+                    return byteArrayOutputStream.toByteArray();
+                }
+            }
         });
     }
 
