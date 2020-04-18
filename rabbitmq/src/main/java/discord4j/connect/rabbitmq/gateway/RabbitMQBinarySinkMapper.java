@@ -11,8 +11,6 @@ import java.nio.charset.StandardCharsets;
 
 public class RabbitMQBinarySinkMapper implements SinkMapper<byte[]> {
 
-    private final int PAYLOAD_SPLIT_SIZE = 32768;
-
     /*
             Defined order:
             - Shard Count
