@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.nio.charset.StandardCharsets;
 
 public class RabbitMQBinarySourceMapper implements SourceMapper<byte[]> {
 
@@ -18,7 +19,8 @@ public class RabbitMQBinarySourceMapper implements SourceMapper<byte[]> {
     - Shard Index
     - Session Sequence
     - Session Id
-    - Payload
+    - Payload Count
+    - Payload(s)
      */
     @Override
     public Publisher<ConnectPayload> apply(byte[] source) {
@@ -28,7 +30,10 @@ public class RabbitMQBinarySourceMapper implements SourceMapper<byte[]> {
                 final int shardIndex = dataInputStream.readInt();
                 final int sessionSeq = dataInputStream.readInt();
                 final String sessionId = dataInputStream.readUTF();
-                final String payload = dataInputStream.readUTF();
+                final int payloadLength = dataInputStream.readInt();
+                final byte[] payloadData = new byte[payloadLength];
+                dataInputStream.read(payloadData, 0, payloadLength);
+                final String payload = new String(payloadData, StandardCharsets.UTF_8);
                 return new ConnectPayload(
                     new ShardInfo(shardIndex, shardCount),
                     new SessionInfo(sessionId, sessionSeq),
