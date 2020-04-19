@@ -20,7 +20,7 @@ package discord4j.connect.rsocket.shard;
 import discord4j.common.operator.RateLimitOperator;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
-import io.rsocket.RSocketFactory;
+import io.rsocket.core.RSocketServer;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
@@ -47,27 +47,28 @@ public class RSocketShardCoordinatorServer {
 
     public Mono<CloseableChannel> start() {
         Map<String, RateLimitOperator<Payload>> limiters = new ConcurrentHashMap<>(1);
-        return RSocketFactory.receive()
-                .errorConsumer(t -> log.error("Server error: {}", t.toString()))
-                .acceptor((setup, sendingSocket) -> Mono.just(new AbstractRSocket() {
+        return RSocketServer.create((setup, sendingSocket) -> Mono.just(socketAcceptor(limiters)))
+                .bind(serverTransport);
+    }
 
-                    @Override
-                    public Mono<Payload> requestResponse(Payload payload) {
-                        String value = payload.getDataUtf8();
-                        log.debug(">: {}", value);
-                        if (value.startsWith("identify")) {
-                            // identify:shard_limiter_key:response_time
-                            // @deprecated response_time (unused)
-                            String[] tokens = value.split(":");
-                            String limiterKey = tokens[1];
-                            RateLimitOperator<Payload> limiter = limiters.computeIfAbsent(limiterKey,
-                                    k -> new RateLimitOperator<>(1, Duration.ofSeconds(6), Schedulers.parallel()));
-                            return Mono.just(DefaultPayload.create("identify.success")).transform(limiter);
-                        }
-                        return Mono.empty();
-                    }
-                }))
-                .transport(serverTransport)
-                .start();
+    private AbstractRSocket socketAcceptor(Map<String, RateLimitOperator<Payload>> limiters) {
+        return new AbstractRSocket() {
+
+            @Override
+            public Mono<Payload> requestResponse(Payload payload) {
+                String value = payload.getDataUtf8();
+                log.debug(">: {}", value);
+                if (value.startsWith("identify")) {
+                    // identify:shard_limiter_key:response_time
+                    // @deprecated response_time (unused)
+                    String[] tokens = value.split(":");
+                    String limiterKey = tokens[1];
+                    RateLimitOperator<Payload> limiter = limiters.computeIfAbsent(limiterKey,
+                            k -> new RateLimitOperator<>(1, Duration.ofSeconds(6), Schedulers.parallel()));
+                    return Mono.just(DefaultPayload.create("identify.success")).transform(limiter);
+                }
+                return Mono.empty();
+            }
+        };
     }
 }

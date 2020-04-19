@@ -2,7 +2,7 @@ package discord4j.connect.rsocket;
 
 import discord4j.common.retry.ReconnectOptions;
 import io.rsocket.RSocket;
-import io.rsocket.RSocketFactory;
+import io.rsocket.core.RSocketConnector;
 import io.rsocket.transport.netty.client.TcpClientTransport;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
@@ -34,16 +34,10 @@ public class ConnectRSocket {
                 .scheduler(reconnectOptions.getBackoffScheduler())
                 .transientErrors(true)
                 .filter(retryPredicate);
-        this.rSocketMono = RSocketFactory.connect()
+        this.rSocketMono = RSocketConnector.create()
                 .reconnect(retrySpec.doBeforeRetry(signal -> log.debug("[{}] Reconnecting to server (attempt {}): {}",
                         id(), signal.totalRetriesInARow() + 1, signal.failure().toString())))
-                .errorConsumer(t -> log.error("[{}] Client error: {}", id(), t.toString()))
-                .addConnectionPlugin((type, conn) -> {
-                    log.debug("[{}] Event of type {} with availability: {}", id(), type, conn.availability());
-                    return conn;
-                })
-                .transport(TcpClientTransport.create(serverAddress))
-                .start()
+                .connect(TcpClientTransport.create(serverAddress))
                 .doOnSubscribe(s -> log.debug("[{}] Connecting to RSocket server: {}", id(), serverAddress));
     }
 

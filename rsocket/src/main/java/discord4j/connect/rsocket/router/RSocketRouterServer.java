@@ -22,7 +22,7 @@ import discord4j.rest.request.RequestQueueFactory;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
-import io.rsocket.RSocketFactory;
+import io.rsocket.core.RSocketServer;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
@@ -66,11 +66,8 @@ public class RSocketRouterServer {
     }
 
     public Mono<CloseableChannel> start() {
-        return RSocketFactory.receive()
-                .errorConsumer(t -> log.error("Server error: {}", t.toString()))
-                .acceptor((setup, sendingSocket) -> Mono.just(leaderAcceptor()))
-                .transport(serverTransport)
-                .start();
+        return RSocketServer.create((setup, sendingSocket) -> Mono.just(leaderAcceptor()))
+                .bind(serverTransport);
     }
 
     private RSocket leaderAcceptor() {
