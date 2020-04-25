@@ -46,19 +46,26 @@ public class RSocketShardCoordinator implements ShardCoordinator {
         int key = shardInfo.getIndex() % shardingFactor;
         return sequence -> Flux.from(sequence)
                 .flatMap(buf -> socket.withSocket(rSocket ->
-                        rSocket.requestResponse(DefaultPayload.create("identify:" + key + ":PT0S"))
+                        rSocket.requestResponse(DefaultPayload.create("identify." + key))
                                 .doOnNext(payload -> log.debug(">: {}", payload.getDataUtf8())))
                         .then(Mono.just(buf)));
     }
 
     @Override
     public Mono<Void> publishConnected(ShardInfo shard) {
-        return Mono.empty();
+        return socket.withSocket(rSocket -> rSocket.fireAndForget(DefaultPayload.create("notify.connected"))).then();
     }
 
     @Override
     public Mono<Void> publishDisconnected(ShardInfo shard, SessionInfo session) {
-        return Mono.empty();
+        return socket.withSocket(rSocket -> rSocket.fireAndForget(DefaultPayload.create("notify.disconnected"))).then();
+    }
+
+    @Override
+    public Mono<Integer> getConnectedCount() {
+        return socket.withSocket(rSocket -> rSocket.requestResponse(DefaultPayload.create("request.connected"))
+                .map(payload -> Integer.parseInt(payload.getDataUtf8())))
+                .next();
     }
 }
 
