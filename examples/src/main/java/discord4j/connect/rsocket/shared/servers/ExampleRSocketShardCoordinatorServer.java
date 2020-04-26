@@ -18,7 +18,7 @@
 package discord4j.connect.rsocket.shared.servers;
 
 import discord4j.connect.rsocket.shard.RSocketShardCoordinatorServer;
-import discord4j.connect.rsocket.shared.Constants;
+import discord4j.connect.Constants;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 

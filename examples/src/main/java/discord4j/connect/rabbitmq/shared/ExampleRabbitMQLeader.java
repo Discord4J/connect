@@ -15,16 +15,17 @@
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package discord4j.connect.rsocket.shared;
+package discord4j.connect.rabbitmq.shared;
 
 import discord4j.common.JacksonResources;
-import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.UpstreamGatewayClient;
-import discord4j.connect.rsocket.gateway.RSocketJacksonSinkMapper;
-import discord4j.connect.rsocket.gateway.RSocketJacksonSourceMapper;
-import discord4j.connect.rsocket.gateway.RSocketPayloadSink;
-import discord4j.connect.rsocket.gateway.RSocketPayloadSource;
+import discord4j.connect.Constants;
+import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
+import discord4j.connect.rabbitmq.gateway.RabbitMQBinarySinkMapper;
+import discord4j.connect.rabbitmq.gateway.RabbitMQBinarySourceMapper;
+import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSink;
+import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSource;
 import discord4j.connect.rsocket.global.RSocketGlobalRateLimiter;
 import discord4j.connect.rsocket.router.RSocketRouter;
 import discord4j.connect.rsocket.router.RSocketRouterOptions;
@@ -60,7 +61,7 @@ import java.net.InetSocketAddress;
  *     <li>Defining the sharding strategy for the leaders</li>
  * </ul>
  */
-public class ExampleRSocketLeader {
+public class ExampleRabbitMQLeader {
 
     public static void main(String[] args) {
 
@@ -90,6 +91,10 @@ public class ExampleRSocketLeader {
                 .count(4)      // but still split our bot guilds into 4 shards
                 .build();
 
+        // define a sample rabbitmq settings which will try to connect to the default port on localhost
+        // with guest:guest credentials on vhost /
+        final ConnectRabbitMQSettings rabbitMQSettings = ConnectRabbitMQSettings.create();
+
         // define the GlobalRouterServer as GRL for all nodes in this architecture
         // define the GlobalRouterServer as Router for all request buckets in this architecture
         // create the RSocket capable Router of queueing API requests across boundaries
@@ -118,10 +123,8 @@ public class ExampleRSocketLeader {
                         .build())
                 .setDispatchEventMapper(DispatchEventMapper.discardEvents())
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
-                        new RSocketPayloadSink(payloadServerAddress,
-                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "inbound")),
-                        new RSocketPayloadSource(payloadServerAddress, "outbound",
-                                new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
+                        new RabbitMQPayloadSink("payload", new RabbitMQBinarySinkMapper(), rabbitMQSettings),
+                        new RabbitMQPayloadSource("gateway", new RabbitMQBinarySourceMapper(), rabbitMQSettings)))
                 .login(UpstreamGatewayClient::new)
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);
@@ -152,5 +155,5 @@ public class ExampleRSocketLeader {
         client.onDisconnect().block();
     }
 
-    private static final Logger log = Loggers.getLogger(ExampleRSocketLeader.class);
+    private static final Logger log = Loggers.getLogger(ExampleRabbitMQLeader.class);
 }

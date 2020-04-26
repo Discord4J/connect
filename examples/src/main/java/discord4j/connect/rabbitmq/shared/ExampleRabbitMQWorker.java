@@ -15,12 +15,17 @@
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package discord4j.connect.rsocket.shared;
+package discord4j.connect.rabbitmq.shared;
 
 import discord4j.common.JacksonResources;
 import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.DownstreamGatewayClient;
+import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
+import discord4j.connect.rabbitmq.gateway.RabbitMQBinarySinkMapper;
+import discord4j.connect.rabbitmq.gateway.RabbitMQBinarySourceMapper;
+import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSink;
+import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSource;
 import discord4j.connect.rsocket.gateway.RSocketJacksonSinkMapper;
 import discord4j.connect.rsocket.gateway.RSocketJacksonSourceMapper;
 import discord4j.connect.rsocket.gateway.RSocketPayloadSink;
@@ -52,7 +57,7 @@ import java.net.InetSocketAddress;
  *     <li>Shared subscription using {@link ShardingStrategy#single()}: stateless workers reading from every shard.</li>
  * </ul>
  */
-public class ExampleRSocketWorker {
+public class ExampleRabbitMQWorker {
 
     public static void main(String[] args) {
 
@@ -72,6 +77,10 @@ public class ExampleRSocketWorker {
         // - no guarantee (yet..) about receiving payloads from the same shard ID in this worker node
         // - if that is your use case, use ShardingStrategy.recommended()
         ShardingStrategy singleStrategy = ShardingStrategy.single();
+
+        // define a sample rabbitmq settings which will try to connect to the default port on localhost
+        // with guest:guest credentials on vhost /
+        final ConnectRabbitMQSettings rabbitMQSettings = ConnectRabbitMQSettings.create();
 
         // define the GlobalRouterServer as GRL for all nodes in this architecture
         // define the GlobalRouterServer as Router for all request buckets in this architecture
@@ -94,10 +103,8 @@ public class ExampleRSocketWorker {
                         .redisClient(redisClient)
                         .build()))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
-                        new RSocketPayloadSink(payloadServerAddress,
-                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound")),
-                        new RSocketPayloadSource(payloadServerAddress, "inbound",
-                                new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
+                        new RabbitMQPayloadSink("gateway", new RabbitMQBinarySinkMapper(), rabbitMQSettings),
+                        new RabbitMQPayloadSource("payload", new RabbitMQBinarySourceMapper(), rabbitMQSettings)))
                 .login(DownstreamGatewayClient::new)
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);

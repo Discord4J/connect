@@ -15,7 +15,7 @@
  * along with Discord4J. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package discord4j.connect.rsocket.shared;
+package discord4j.connect;
 
 public final class Constants {
 
