@@ -103,7 +103,7 @@ public class ExampleRabbitMQWorker {
                         .redisClient(redisClient)
                         .build()))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
-                        new RabbitMQPayloadSink("gateway", new RabbitMQBinarySinkMapper(), rabbitMQSettings),
+                        new RabbitMQPayloadSink(new RabbitMQBinarySinkMapper(), rabbitMQSettings).setQueueName("gateway"),
                         new RabbitMQPayloadSource("payload", new RabbitMQBinarySourceMapper(), rabbitMQSettings)))
                 .login(DownstreamGatewayClient::new)
                 .blockOptional()

@@ -123,7 +123,7 @@ public class ExampleRabbitMQLeader {
                         .build())
                 .setDispatchEventMapper(DispatchEventMapper.discardEvents())
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
-                        new RabbitMQPayloadSink("payload", new RabbitMQBinarySinkMapper(), rabbitMQSettings),
+                        new RabbitMQPayloadSink(new RabbitMQBinarySinkMapper(), rabbitMQSettings).setQueueName("payload"),
                         new RabbitMQPayloadSource("gateway", new RabbitMQBinarySourceMapper(), rabbitMQSettings)))
                 .login(UpstreamGatewayClient::new)
                 .blockOptional()
