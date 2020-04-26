@@ -1,6 +1,5 @@
 package discord4j.connect.rabbitmq.gateway;
 
-import com.rabbitmq.client.Address;
 import com.rabbitmq.client.Delivery;
 import discord4j.connect.common.ConnectPayload;
 import discord4j.connect.common.PayloadSource;
@@ -21,14 +20,15 @@ public class RabbitMQPayloadSource implements PayloadSource {
     private final SourceMapper<byte[]> mapper;
     private final Flux<byte[]> inbound;
 
-    public RabbitMQPayloadSource(final String queue, final SourceMapper<byte[]> mapper, final ConnectRabbitMQSettings settings) {
+    public RabbitMQPayloadSource(final String queue, final SourceMapper<byte[]> mapper,
+                                 final ConnectRabbitMQSettings settings) {
         final ConnectRabbitMQ rabbitMQ = new ConnectRabbitMQ(settings);
         this.mapper = mapper;
         this.inbound = rabbitMQ.consume(queue)
-            .map(Delivery::getBody)
-            .doOnSubscribe(s -> log.info("Begin receiving from server"))
-            .doFinally(s -> log.info("Receiver completed after {}", s))
-            .share(); // allow multicasting inbound payload
+                .map(Delivery::getBody)
+                .doOnSubscribe(s -> log.info("Begin receiving from server"))
+                .doFinally(s -> log.info("Receiver completed after {}", s))
+                .share(); // allow multicasting inbound payload
     }
 
     @Override

@@ -23,8 +23,8 @@ public class ConnectRabbitMQ {
 
     public ConnectRabbitMQ(final Address... clusterIps) {
         this(
-            new SenderOptions().connectionSupplier(connectionFactory -> connectionFactory.newConnection(clusterIps)),
-            new ReceiverOptions().connectionSupplier(connectionFactory -> connectionFactory.newConnection(clusterIps))
+                new SenderOptions().connectionSupplier(connectionFactory -> connectionFactory.newConnection(clusterIps)),
+                new ReceiverOptions().connectionSupplier(connectionFactory -> connectionFactory.newConnection(clusterIps))
         );
     }
 
@@ -36,13 +36,18 @@ public class ConnectRabbitMQ {
         return sender.sendWithPublishConfirms(data.map(it -> new OutboundMessage("", queue, it)));
     }
 
+    public Mono<OutboundMessageResult> sendOne(final String queue, final byte[] data) {
+        return sender.sendWithPublishConfirms(Mono.fromCallable(() -> new OutboundMessage("", queue, data)))
+                .next();
+    }
+
     public Mono<AMQP.Queue.DeclareOk> declareOutboundQueue(final String queue) {
         return sender.declareQueue(QueueSpecification.queue(queue));
     }
 
     public Flux<Delivery> consume(final String queue) {
         return receiver.consumeAutoAck(queue)
-            .delaySubscription(sender.declareQueue(QueueSpecification.queue(queue)));
+                .delaySubscription(sender.declareQueue(QueueSpecification.queue(queue)));
     }
 
     public void close() {
