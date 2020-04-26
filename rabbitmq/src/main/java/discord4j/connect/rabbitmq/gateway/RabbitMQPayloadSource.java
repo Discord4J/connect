@@ -11,6 +11,8 @@ import reactor.core.publisher.Mono;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
+import java.util.Collections;
+import java.util.Set;
 import java.util.function.Function;
 
 public class RabbitMQPayloadSource implements PayloadSource {
@@ -22,9 +24,16 @@ public class RabbitMQPayloadSource implements PayloadSource {
 
     public RabbitMQPayloadSource(final String queue, final SourceMapper<byte[]> mapper,
                                  final ConnectRabbitMQSettings settings) {
+        this(Collections.singleton(queue), mapper, settings);
+    }
+
+    public RabbitMQPayloadSource(final Set<String> queues, final SourceMapper<byte[]> mapper,
+                                 final ConnectRabbitMQSettings settings) {
         final ConnectRabbitMQ rabbitMQ = new ConnectRabbitMQ(settings);
         this.mapper = mapper;
-        this.inbound = rabbitMQ.consume(queue)
+
+        this.inbound = Flux.fromIterable(queues)
+                .flatMap(rabbitMQ::consume)
                 .map(Delivery::getBody)
                 .doOnSubscribe(s -> log.info("Begin receiving from server"))
                 .doFinally(s -> log.info("Receiver completed after {}", s))
