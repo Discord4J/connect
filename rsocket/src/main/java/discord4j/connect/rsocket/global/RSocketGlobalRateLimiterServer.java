@@ -23,7 +23,8 @@ import discord4j.rest.request.GlobalRateLimiter;
 import discord4j.rest.request.RequestQueueFactory;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
-import io.rsocket.RSocketFactory;
+import io.rsocket.RSocket;
+import io.rsocket.core.RSocketServer;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
@@ -63,58 +64,59 @@ public class RSocketGlobalRateLimiterServer {
     }
 
     public Mono<CloseableChannel> start() {
-        return RSocketFactory.receive()
-                .errorConsumer(t -> log.error("Server error: {}", t.toString()))
-                .acceptor((setup, sendingSocket) -> Mono.just(new AbstractRSocket() {
+        return RSocketServer.create((setup, sendingSocket) -> Mono.just(socketAcceptor()))
+                .bind(serverTransport);
+    }
 
-                    @Override
-                    public Flux<Payload> requestChannel(Publisher<Payload> payloads) {
-                        MonoProcessor<Void> release = MonoProcessor.create();
-                        return Flux.from(payloads)
-                                .flatMap(payload -> {
-                                    String content = payload.getDataUtf8();
-                                    if (content.startsWith(ACQUIRE)) {
-                                        String[] tokens = content.split(":", 2);
-                                        String id = tokens[1];
-                                        log.debug("[{}] Acquire request", id);
-                                        MonoProcessor<Void> acquire = MonoProcessor.create();
-                                        RequestBridge<Void> notifier = new RequestBridge<>(id, acquire, release);
-                                        globalStream.push(notifier);
-                                        return acquire.thenReturn(DefaultPayload.create(PERMIT))
-                                                .doOnSuccess(__ -> log.debug("[{}] Acquired permit for request", id));
-                                    } else if (content.startsWith(RELEASE)) {
-                                        String[] tokens = content.split(":", 2);
-                                        String id = tokens[1];
-                                        log.debug("[{}] Release request", id);
-                                        release.onComplete();
-                                    } else {
-                                        log.warn("[requestChannel] Unsupported payload: {}", content);
-                                    }
-                                    return Mono.empty();
-                                });
-                    }
+    private RSocket socketAcceptor() {
+        return new AbstractRSocket() {
 
-                    @Override
-                    public Mono<Payload> requestResponse(Payload payload) {
-                        String content = payload.getDataUtf8();
-                        if (content.startsWith(LIMIT_GLOBAL)) {
-                            // LIMIT:global:{rateLimitNanos}:{nanoTimestamp}
-                            // reply with "OK:{nanoTimestamp}"
-                            String[] tokens = content.split(":", 4);
-                            Duration rateLimit = Duration.ofNanos(Long.parseLong(tokens[2]));
-                            Duration lag = Duration.ofNanos(System.nanoTime() - Long.parseLong(tokens[3]));
-                            log.debug("[{}] Rate limiting globally by {} (delta: {})", rateLimit, lag);
-                            return delegate.rateLimitFor(orZero(rateLimit.minus(lag))).then(Mono.just(okPayload()));
-                        } else if (content.startsWith(LIMIT_QUERY)) {
-                            // QUERY:global
-                            // reply with "QUERY:global:{remaining}:{nanoTimestamp}"
-                            return delegate.getRemaining().map(RSocketGlobalRateLimiterServer::queryLimitReply);
-                        }
-                        return Mono.empty();
-                    }
-                }))
-                .transport(serverTransport)
-                .start();
+            @Override
+            public Flux<Payload> requestChannel(Publisher<Payload> payloads) {
+                MonoProcessor<Void> release = MonoProcessor.create();
+                return Flux.from(payloads)
+                        .flatMap(payload -> {
+                            String content = payload.getDataUtf8();
+                            if (content.startsWith(ACQUIRE)) {
+                                String[] tokens = content.split(":", 2);
+                                String id = tokens[1];
+                                log.debug("[{}] Acquire request", id);
+                                MonoProcessor<Void> acquire = MonoProcessor.create();
+                                RequestBridge<Void> notifier = new RequestBridge<>(id, acquire, release);
+                                globalStream.push(notifier);
+                                return acquire.thenReturn(DefaultPayload.create(PERMIT))
+                                        .doOnSuccess(__ -> log.debug("[{}] Acquired permit for request", id));
+                            } else if (content.startsWith(RELEASE)) {
+                                String[] tokens = content.split(":", 2);
+                                String id = tokens[1];
+                                log.debug("[{}] Release request", id);
+                                release.onComplete();
+                            } else {
+                                log.warn("[requestChannel] Unsupported payload: {}", content);
+                            }
+                            return Mono.empty();
+                        });
+            }
+
+            @Override
+            public Mono<Payload> requestResponse(Payload payload) {
+                String content = payload.getDataUtf8();
+                if (content.startsWith(LIMIT_GLOBAL)) {
+                    // LIMIT:global:{rateLimitNanos}:{nanoTimestamp}
+                    // reply with "OK:{nanoTimestamp}"
+                    String[] tokens = content.split(":", 4);
+                    Duration rateLimit = Duration.ofNanos(Long.parseLong(tokens[2]));
+                    Duration lag = Duration.ofNanos(System.nanoTime() - Long.parseLong(tokens[3]));
+                    log.debug("[{}] Rate limiting globally by {} (delta: {})", rateLimit, lag);
+                    return delegate.rateLimitFor(orZero(rateLimit.minus(lag))).then(Mono.just(okPayload()));
+                } else if (content.startsWith(LIMIT_QUERY)) {
+                    // QUERY:global
+                    // reply with "QUERY:global:{remaining}:{nanoTimestamp}"
+                    return delegate.getRemaining().map(RSocketGlobalRateLimiterServer::queryLimitReply);
+                }
+                return Mono.empty();
+            }
+        };
     }
 
     private static Duration orZero(Duration duration) {

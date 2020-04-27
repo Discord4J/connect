@@ -3,7 +3,7 @@ package discord4j.connect.rsocket.gateway;
 import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
-import io.rsocket.RSocketFactory;
+import io.rsocket.core.RSocketServer;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
 import io.rsocket.util.DefaultPayload;
@@ -55,11 +55,8 @@ public class RSocketPayloadServer {
     }
 
     public Mono<CloseableChannel> start() {
-        return RSocketFactory.receive()
-                .errorConsumer(t -> log.error("Server error: {}", t.toString()))
-                .acceptor((setup, sendingSocket) -> Mono.just(leaderAcceptor(sendingSocket)))
-                .transport(serverTransport)
-                .start();
+        return RSocketServer.create((setup, sendingSocket) -> Mono.just(leaderAcceptor(sendingSocket)))
+                .bind(serverTransport);
     }
 
     private RSocket leaderAcceptor(RSocket sendingSocket) {
