@@ -1,6 +1,9 @@
 package discord4j.connect.rabbitmq.gateway;
 
-import discord4j.connect.common.*;
+import discord4j.connect.common.ConnectPayload;
+import discord4j.connect.common.PayloadDestinationMapper;
+import discord4j.connect.common.PayloadSink;
+import discord4j.connect.common.SinkMapper;
 import discord4j.connect.rabbitmq.ConnectRabbitMQ;
 import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
 import reactor.core.publisher.Flux;
@@ -106,6 +109,8 @@ public class RabbitMQPayloadSink implements PayloadSink {
         } else {
             return source
                     .flatMap(payload -> Mono.zip(Mono.just(payload), destinationMapper.getDestination(payload)))
+                    .doOnNext(tuple -> log.debug("Queue is {} for payload {}", tuple.getT2(),
+                            tuple.getT1().getPayload()))
                     .flatMap(tuple -> declareQueue(tuple.getT2()).thenReturn(tuple))
                     .flatMap(tuple -> Mono.zip(Mono.from(mapper.apply(tuple.getT1())), Mono.just(tuple.getT2())))
                     .flatMap(tuple -> rabbitMQ.sendOne(tuple.getT2(), tuple.getT1()))
