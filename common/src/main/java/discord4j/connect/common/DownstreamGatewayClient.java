@@ -20,6 +20,7 @@ package discord4j.connect.common;
 import discord4j.discordjson.json.gateway.Dispatch;
 import discord4j.discordjson.json.gateway.Opcode;
 import discord4j.gateway.GatewayClient;
+import discord4j.gateway.LazyDispatch;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
 import discord4j.gateway.json.GatewayPayload;
@@ -53,7 +54,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     private static final Logger senderLog = Loggers.getLogger("discord4j.gateway.protocol.sender");
     private static final Logger receiverLog = Loggers.getLogger("discord4j.gateway.protocol.receiver");
 
-    private final EmitterProcessor<Dispatch> dispatch = EmitterProcessor.create(false);
+    private final EmitterProcessor<LazyDispatch<Dispatch>> dispatch = EmitterProcessor.create(false);
     private final EmitterProcessor<GatewayPayload<?>> receiver = EmitterProcessor.create(false);
     private final EmitterProcessor<GatewayPayload<?>> sender = EmitterProcessor.create(false);
 
@@ -61,7 +62,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     private final AtomicInteger shardCount = new AtomicInteger();
     private final AtomicReference<String> sessionId = new AtomicReference<>("");
 
-    private final FluxSink<Dispatch> dispatchSink;
+    private final FluxSink<LazyDispatch<Dispatch>> dispatchSink;
     private final FluxSink<GatewayPayload<?>> receiverSink;
     private final FluxSink<GatewayPayload<?>> senderSink;
 
@@ -130,7 +131,7 @@ public class DownstreamGatewayClient implements GatewayClient {
             return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture)
                     // a downstream client should only signal "connected" state on subscription
                     // TODO: improve signalling state for this client
-                    .doOnSubscribe(s -> dispatchSink.next(GatewayStateChange.connected()))
+                    .doOnSubscribe(s -> dispatchSink.next(new LazyDispatch<>(null, GatewayStateChange.connected())))
                     .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
                     .doOnCancel(() -> close(false))
                     .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
@@ -165,14 +166,15 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     private void handlePayload(GatewayPayload<?> payload) {
         if (Opcode.DISPATCH.equals(payload.getOp())) {
-            if (payload.getData() != null) {
-                if (payload instanceof ShardGatewayPayload) {
+            if (payload instanceof ShardGatewayPayload) {
+                if (payload.getData() != null) {
                     ShardGatewayPayload<?> shardPayload = (ShardGatewayPayload<?>) payload;
-                    dispatchSink.next(new ShardAwareDispatch(shardPayload.getShardIndex(), getShardCount(),
-                            (Dispatch) payload.getData()));
-                } else {
-                    dispatchSink.next((Dispatch) payload.getData());
+                    dispatchSink.next(new LazyDispatch<>(null, new ShardAwareDispatch(shardPayload.getShardIndex(),
+                            getShardCount(),
+                            (Dispatch) payload.getData()), true));
                 }
+            } else {
+                dispatchSink.next(new LazyDispatch(payload, null));
             }
         }
     }
@@ -203,7 +205,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public Flux<Dispatch> dispatch() {
+    public Flux<LazyDispatch<Dispatch>> dispatch() {
         return dispatch.doOnSubscribe(s -> log.info("Subscribed to dispatch sequence"));
     }
 
