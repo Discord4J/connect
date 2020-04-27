@@ -50,7 +50,6 @@ public class ConnectGatewayPayload<T extends PayloadData> extends GatewayPayload
         if (cachedData != null) {
             return cachedData;
         }
-        log.error("Uncached getData call on {}", rawData.toPrettyString(), new RuntimeException());
         cachedData = dispatchDeserializer.apply(rawData);
         dispatchDeserializer = null; // free reference to the function
         return cachedData;
