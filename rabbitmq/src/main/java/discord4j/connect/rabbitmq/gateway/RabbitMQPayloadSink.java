@@ -95,23 +95,6 @@ public class RabbitMQPayloadSink implements PayloadSink {
         );
     }
 
-    /**
-     * Creates a new {@link RabbitMQPayloadSink} with a shard aware destination mapper
-     * <p>
-     * Calling this method overwrites the destination mapper and resets the queue name
-     *
-     * @param queuePrefix the queue prefix to use for the {@link ShardAwareDestinationMapper}
-     * @return a new immutable instance
-     */
-    public RabbitMQPayloadSink setShardAwareDestinationMapper(final String queuePrefix) {
-        return new RabbitMQPayloadSink(
-                null,
-                mapper,
-                rabbitMQ,
-                new ShardAwareDestinationMapper(queuePrefix)
-        );
-    }
-
     @Override
     public Flux<?> send(final Flux<ConnectPayload> source) {
         if (this.destinationMapper == null) {
