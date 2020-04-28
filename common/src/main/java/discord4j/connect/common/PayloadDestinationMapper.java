@@ -2,7 +2,6 @@ package discord4j.connect.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import discord4j.common.JacksonResources;
-import discord4j.connect.common.gateway.PartialGatewayPayload;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -72,12 +71,24 @@ public interface PayloadDestinationMapper {
      */
     static PayloadDestinationMapper eventBased(final ObjectMapper mapper, final String fallbackQueue,
                                                final Map<String, String> queueMap) {
+        final String typeLiteral = "\"t\":\"";
         return source -> Mono.fromCallable(() -> source)
-                .flatMap(payload -> Mono.fromCallable(() -> mapper.readValue(payload.getPayload(),
-                        PartialGatewayPayload.class)))
-                .map(partialGatewayPayload -> Optional.ofNullable(partialGatewayPayload.getType()))
+                .map(ConnectPayload::getPayload)
+                .map(payload -> {
+                    final int typeStartIndex = payload.indexOf(typeLiteral);
+                    final int typeEndIndex = typeStartIndex == -1 ? -1 :
+                            payload.indexOf("\"", typeStartIndex + typeLiteral.length());
+                    if (typeStartIndex == -1 || typeEndIndex == -1) {
+                        return Optional.ofNullable((String) null);
+                    }
+                    final String eventType = payload.substring(typeStartIndex + typeLiteral.length(), typeEndIndex);
+                    if (eventType.isEmpty()) {
+                        return Optional.ofNullable((String) null);
+                    }
+                    return Optional.of(queueMap.getOrDefault(eventType, fallbackQueue));
+                })
                 .filter(Optional::isPresent)
-                .map(event -> queueMap.getOrDefault(event.get(), fallbackQueue))
+                .map(Optional::get)
                 .defaultIfEmpty(fallbackQueue);
     }
 
