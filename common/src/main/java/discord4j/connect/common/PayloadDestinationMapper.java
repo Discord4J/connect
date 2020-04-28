@@ -2,6 +2,7 @@ package discord4j.connect.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import discord4j.common.JacksonResources;
+import discord4j.connect.common.gateway.PartialGatewayPayload;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;

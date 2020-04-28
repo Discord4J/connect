@@ -1,4 +1,4 @@
-package discord4j.connect.common;
+package discord4j.connect.common.gateway;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
