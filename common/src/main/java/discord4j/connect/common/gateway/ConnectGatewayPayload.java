@@ -1,5 +1,6 @@
 package discord4j.connect.common.gateway;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
@@ -13,6 +14,7 @@ import reactor.util.annotation.Nullable;
 import java.util.function.Function;
 
 @JsonDeserialize(using = ConnectPayloadDeserializer.class)
+@JsonIgnoreProperties({ "data" })
 public class ConnectGatewayPayload<T extends PayloadData> extends GatewayPayload<T> {
 
     private static final Logger log = Loggers.getLogger(ConnectGatewayPayload.class);
