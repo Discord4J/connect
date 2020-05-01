@@ -147,7 +147,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     private ShardInfo getShardInfo(GatewayPayload<?> payload) {
         if (payload instanceof ShardGatewayPayload) {
             ShardGatewayPayload<?> shardPayload = (ShardGatewayPayload<?>) payload;
-            return new ShardInfo(shardPayload.getShardIndex(), getShardCount());
+            return ShardInfo.create(shardPayload.getShardIndex(), getShardCount());
         }
         return initialShardInfo;
     }
