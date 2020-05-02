@@ -2,6 +2,7 @@ package discord4j.connect.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import discord4j.common.JacksonResources;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -19,7 +20,7 @@ public interface PayloadDestinationMapper {
      * @param payload the payload about to process
      * @return the queue name for the payload
      */
-    Mono<String> getDestination(ConnectPayload payload);
+    Publisher<String> getDestination(ConnectPayload payload);
 
     /**
      * A shard aware destination-mapper to queue all payloads into a specific queue for their shard

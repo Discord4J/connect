@@ -108,11 +108,11 @@ public class RabbitMQPayloadSink implements PayloadSink {
                     .doFinally(s -> log.info("Sender completed after {}", s));
         } else {
             return source
-                    .flatMap(payload -> Mono.zip(Mono.just(payload), destinationMapper.getDestination(payload)))
-                    .doOnNext(tuple -> log.debug("Queue is {} for payload {}", tuple.getT2(),
-                            tuple.getT1().getPayload()))
-                    .flatMap(tuple -> declareQueue(tuple.getT2()).thenReturn(tuple))
-                    .flatMap(tuple -> Mono.zip(Mono.from(mapper.apply(tuple.getT1())), Mono.just(tuple.getT2())))
+                    .flatMap(payload -> Flux.from(destinationMapper.getDestination(payload)).zipWith(Mono.just(payload)))
+                    .doOnNext(tuple -> log.debug("Queue is {} for payload {}", tuple.getT1(),
+                            tuple.getT2().getPayload()))
+                    .flatMap(tuple -> declareQueue(tuple.getT1()).thenReturn(tuple))
+                    .flatMap(tuple -> Mono.zip(Mono.from(mapper.apply(tuple.getT2())), Mono.just(tuple.getT1())))
                     .flatMap(tuple -> rabbitMQ.sendOne(tuple.getT2(), tuple.getT1()))
                     .doOnError(e -> log.error("Send failed", e))
                     .doOnSubscribe(s -> log.info("Begin sending to server"))
