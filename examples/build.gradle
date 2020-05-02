@@ -1,3 +1,7 @@
+plugins {
+    id "me.champeau.gradle.jmh" version "0.5.0"
+}
+
 dependencies {
     api project(':rsocket')
     api project(':rabbitmq')
@@ -5,4 +9,10 @@ dependencies {
     implementation "ch.qos.logback:logback-classic:$logback_version"
     implementation "com.discord4j:discord4j-core:$discord4j_core_version"
     implementation "com.discord4j:stores-redis:$stores_redis_version"
+    jmh 'org.openjdk.jmh:jmh-core-benchmarks:1.23'
+    jmh 'org.openjdk.jmh:jmh-generator-annprocess:1.21'
+}
+
+jmh {
+    include = ['Connect*']
 }
