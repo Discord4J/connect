@@ -99,6 +99,12 @@ public class DownstreamGatewayClient implements GatewayClient {
                         if (filterByIndex && inPayload.getShard().getIndex() != initialShardInfo.getIndex()) {
                             return Mono.empty();
                         }
+
+                        if (sessionId.get().equals("")) {
+                            // first payload
+                            // TODO: improve state updates for this client
+                            dispatchSink.next(GatewayStateChange.connected());
+                        }
                         sessionId.set(inPayload.getSession().getId());
                         shardCount.set(inPayload.getShard().getCount());
 
@@ -128,9 +134,6 @@ public class DownstreamGatewayClient implements GatewayClient {
                             .then();
 
             return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture)
-                    // a downstream client should only signal "connected" state on subscription
-                    // TODO: improve signalling state for this client
-                    .doOnSubscribe(s -> dispatchSink.next(GatewayStateChange.connected()))
                     .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
                     .doOnCancel(() -> close(false))
                     .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
