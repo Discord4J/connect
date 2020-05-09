@@ -65,7 +65,9 @@ public class UpstreamGatewayClient implements GatewayClient {
     public Mono<Void> execute(String gatewayUrl) {
         // Receive from Discord --> Send to downstream
         Mono<Void> senderFuture =
-                sink.send(receiver(buf -> Mono.just(toConnectPayload(buf.toString(StandardCharsets.UTF_8)))))
+                sink.send(receiver(
+                        buf -> Mono.just(toConnectPayload(buf.toString(StandardCharsets.UTF_8)))
+                                .doFinally(s -> buf.release())))
                         .subscribeOn(Schedulers.newSingle("payload-sender"))
                         .doOnError(t -> log.error("Sender error", t))
                         .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
