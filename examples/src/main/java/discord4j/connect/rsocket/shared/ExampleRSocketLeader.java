@@ -32,11 +32,8 @@ import discord4j.connect.rsocket.shard.RSocketShardCoordinator;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.dispatch.DispatchEventMapper;
-import discord4j.core.object.presence.Presence;
 import discord4j.core.shard.InvalidationStrategy;
 import discord4j.core.shard.ShardingStrategy;
-import discord4j.gateway.intent.Intent;
-import discord4j.gateway.intent.IntentSet;
 import discord4j.store.redis.RedisStoreService;
 import io.lettuce.core.RedisClient;
 import reactor.core.publisher.Mono;
@@ -106,11 +103,11 @@ public class ExampleRSocketLeader {
                 .gateway()
                 .setSharding(recommendedStrategy)
                 .setShardCoordinator(new RSocketShardCoordinator(coordinatorServerAddress))
-                .setDisabledIntents(IntentSet.of(
-                        Intent.GUILD_PRESENCES,
-                        Intent.GUILD_MESSAGE_TYPING,
-                        Intent.DIRECT_MESSAGE_TYPING))
-                .setInitialStatus(s -> Presence.invisible())
+//                .setDisabledIntents(IntentSet.of(
+//                        Intent.GUILD_PRESENCES,
+//                        Intent.GUILD_MESSAGE_TYPING,
+//                        Intent.DIRECT_MESSAGE_TYPING))
+//                .setInitialStatus(s -> Presence.invisible())
                 .setInvalidationStrategy(InvalidationStrategy.disable())
                 .setStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
