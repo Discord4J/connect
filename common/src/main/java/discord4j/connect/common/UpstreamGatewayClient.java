@@ -98,7 +98,7 @@ public class UpstreamGatewayClient implements GatewayClient {
     }
 
     private ConnectPayload toConnectPayload(String gatewayPayload) {
-        return new ConnectPayload(shardInfo, new SessionInfo(getSessionId(), getSequence()), gatewayPayload);
+        return new ConnectPayload(shardInfo, SessionInfo.create(getSessionId(), getSequence()), gatewayPayload);
     }
 
     @Override

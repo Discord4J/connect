@@ -1,5 +1,6 @@
 package discord4j.connect.support;
 
+import discord4j.common.util.Snowflake;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.domain.lifecycle.ReadyEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
@@ -9,7 +10,6 @@ import discord4j.core.object.presence.Presence;
 import discord4j.discordjson.json.ApplicationInfoData;
 import discord4j.discordjson.json.ImmutableMessageCreateRequest;
 import discord4j.discordjson.possible.Possible;
-import discord4j.rest.util.Snowflake;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;

@@ -36,7 +36,7 @@ public class RabbitMQBinarySourceMapper implements SourceMapper<byte[]> {
                 final String payload = new String(payloadData, StandardCharsets.UTF_8);
                 return new ConnectPayload(
                     ShardInfo.create(shardIndex, shardCount),
-                    new SessionInfo(sessionId, sessionSeq),
+                    SessionInfo.create(sessionId, sessionSeq),
                     payload
                 );
             }

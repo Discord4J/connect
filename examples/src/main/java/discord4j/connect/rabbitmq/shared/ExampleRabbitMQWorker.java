@@ -26,16 +26,13 @@ import discord4j.connect.rabbitmq.gateway.RabbitMQBinarySinkMapper;
 import discord4j.connect.rabbitmq.gateway.RabbitMQBinarySourceMapper;
 import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSink;
 import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSource;
-import discord4j.connect.rsocket.gateway.RSocketJacksonSinkMapper;
-import discord4j.connect.rsocket.gateway.RSocketJacksonSourceMapper;
-import discord4j.connect.rsocket.gateway.RSocketPayloadSink;
-import discord4j.connect.rsocket.gateway.RSocketPayloadSource;
 import discord4j.connect.rsocket.global.RSocketGlobalRateLimiter;
 import discord4j.connect.rsocket.router.RSocketRouter;
 import discord4j.connect.rsocket.router.RSocketRouterOptions;
 import discord4j.connect.support.NoBotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
+import discord4j.core.shard.MemberRequestFilter;
 import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.api.readonly.ReadOnlyStoreService;
 import discord4j.store.redis.RedisStoreService;
@@ -98,7 +95,7 @@ public class ExampleRabbitMQWorker {
                 .build(RSocketRouter::new)
                 .gateway()
                 .setSharding(singleStrategy)
-                .setMemberRequest(false)
+                .setMemberRequestFilter(MemberRequestFilter.none())
                 .setStoreService(new ReadOnlyStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
                         .build()))

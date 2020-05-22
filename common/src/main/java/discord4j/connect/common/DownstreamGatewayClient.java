@@ -80,7 +80,7 @@ public class DownstreamGatewayClient implements GatewayClient {
         this.payloadWriter = gatewayOptions.getPayloadWriter();
         this.initialShardInfo = gatewayOptions.getIdentifyOptions().getShardInfo();
         this.filterByIndex = initialShardInfo.getIndex() != 0 || initialShardInfo.getCount() != 1;
-        this.shardCount.set(gatewayOptions.getIdentifyOptions().getShardCount());
+        this.shardCount.set(gatewayOptions.getIdentifyOptions().getShardInfo().getCount());
         this.dispatchSink = dispatch.sink(FluxSink.OverflowStrategy.LATEST);
         this.receiverSink = receiver.sink(FluxSink.OverflowStrategy.LATEST);
         this.senderSink = sender.sink(FluxSink.OverflowStrategy.LATEST);
@@ -156,7 +156,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     private SessionInfo getSessionInfo() {
-        return new SessionInfo(getSessionId(), getSequence());
+        return SessionInfo.create(getSessionId(), getSequence());
     }
 
     private GatewayPayload<?> updateSequence(GatewayPayload<?> payload) {
