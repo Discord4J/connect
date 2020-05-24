@@ -29,7 +29,7 @@ ext {
     rabbitmq_version = '1.4.2.RELEASE'
     jsr305_version = '3.0.2'
     junit_version = '4.13'
-    logback_version = '1.3.0-alpha4'
+    logback_version = '1.2.3'
 
     isJitpack = "true" == System.getenv("JITPACK")
     isRelease = !version.toString().endsWith('-SNAPSHOT')
