@@ -31,6 +31,7 @@ import discord4j.connect.rsocket.router.RSocketRouterOptions;
 import discord4j.connect.support.NoBotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
+import discord4j.core.shard.MemberRequestFilter;
 import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.api.readonly.ReadOnlyStoreService;
 import discord4j.store.redis.RedisStoreService;
@@ -62,7 +63,7 @@ public class ExampleRSocketWorker {
         InetSocketAddress payloadServerAddress = new InetSocketAddress(Constants.PAYLOAD_SERVER_PORT);
 
         // use a common jackson factory to reuse it where possible
-        JacksonResources jackson = new JacksonResources();
+        JacksonResources jackson = JacksonResources.create();
 
         // use redis to store entity caches
         RedisClient redisClient = RedisClient.create(Constants.REDIS_CLIENT_URI);
@@ -89,7 +90,7 @@ public class ExampleRSocketWorker {
                 .build(RSocketRouter::new)
                 .gateway()
                 .setSharding(singleStrategy)
-                .setMemberRequest(false)
+                .setMemberRequestFilter(MemberRequestFilter.none())
                 .setStoreService(new ReadOnlyStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
                         .build()))

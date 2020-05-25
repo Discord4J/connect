@@ -69,7 +69,7 @@ public class ExampleRSocketLeader {
         InetSocketAddress payloadServerAddress = new InetSocketAddress(Constants.PAYLOAD_SERVER_PORT);
 
         // use a common jackson factory to reuse it where possible
-        JacksonResources jackson = new JacksonResources();
+        JacksonResources jackson = JacksonResources.create();
 
         // use redis to store entity caches
         RedisClient redisClient = RedisClient.create(Constants.REDIS_CLIENT_URI);
