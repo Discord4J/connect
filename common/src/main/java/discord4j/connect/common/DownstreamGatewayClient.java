@@ -38,6 +38,7 @@ import reactor.util.Loggers;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -59,6 +60,7 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     private final AtomicInteger lastSequence = new AtomicInteger(0);
     private final AtomicInteger shardCount = new AtomicInteger();
+    private final AtomicBoolean firstPayload = new AtomicBoolean();
     private final AtomicReference<String> sessionId = new AtomicReference<>("");
 
     private final FluxSink<Dispatch> dispatchSink;
@@ -100,8 +102,7 @@ public class DownstreamGatewayClient implements GatewayClient {
                             return Mono.empty();
                         }
 
-                        if (sessionId.get().equals("")) {
-                            // first payload
+                        if (firstPayload.compareAndSet(false, true)) {
                             // TODO: improve state updates for this client
                             dispatchSink.next(GatewayStateChange.connected());
                         }
@@ -200,6 +201,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     @Override
     public Mono<Void> close(boolean allowResume) {
         return Mono.fromRunnable(() -> {
+            dispatchSink.next(GatewayStateChange.disconnected());
             senderSink.complete();
             closeFuture.onComplete();
         });
