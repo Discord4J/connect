@@ -22,10 +22,10 @@ import org.reactivestreams.Publisher;
 /**
  * A function capable of converting a {@link ConnectPayload} into a type used by a {@link PayloadSink} implementation.
  *
- * @param <T> the target type
+ * @param <R> the target type
  */
 @FunctionalInterface
-public interface SinkMapper<T> {
+public interface SinkMapper<R> {
 
     /**
      * Transform a single {@link ConnectPayload} into a {@link Publisher} with a target type to be used by an
@@ -34,5 +34,5 @@ public interface SinkMapper<T> {
      * @param payload the message to process
      * @return a reactive response with the target type
      */
-    Publisher<T> apply(ConnectPayload payload);
+    Publisher<R> apply(ConnectPayload payload);
 }

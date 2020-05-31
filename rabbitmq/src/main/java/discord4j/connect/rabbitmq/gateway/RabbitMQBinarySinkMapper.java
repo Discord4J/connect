@@ -9,6 +9,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * A mapper that can create a binary (UTF-8) representation of a {@link ConnectPayload}.
+ */
 public class RabbitMQBinarySinkMapper implements SinkMapper<byte[]> {
 
     /*

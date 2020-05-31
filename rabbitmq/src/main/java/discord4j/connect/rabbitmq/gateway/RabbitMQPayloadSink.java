@@ -1,137 +1,113 @@
 package discord4j.connect.rabbitmq.gateway;
 
+import com.rabbitmq.client.ShutdownSignalException;
 import discord4j.connect.common.ConnectPayload;
-import discord4j.connect.common.PayloadDestinationMapper;
 import discord4j.connect.common.PayloadSink;
 import discord4j.connect.common.SinkMapper;
 import discord4j.connect.rabbitmq.ConnectRabbitMQ;
-import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
+import reactor.rabbitmq.SendOptions;
 import reactor.util.Logger;
 import reactor.util.Loggers;
-import reactor.util.annotation.Nullable;
+import reactor.util.retry.RetryBackoffSpec;
+import reactor.util.retry.RetrySpec;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.time.Duration;
+import java.util.Objects;
+import java.util.function.BiFunction;
 
+/**
+ * A RabbitMQ producer that can send payloads to a broker or cluster.
+ */
 public class RabbitMQPayloadSink implements PayloadSink {
 
     private static final Logger log = Loggers.getLogger(RabbitMQPayloadSink.class);
 
-    private final SinkMapper<byte[]> mapper;
+    public static final RetryBackoffSpec DEFAULT_RETRY_STRATEGY =
+            RetrySpec.fixedDelay(Long.MAX_VALUE, Duration.ofSeconds(1))
+                    .filter(t -> !(t instanceof ShutdownSignalException))
+                    .doBeforeRetry(retry -> log.info("Producer retry {} due to {}", retry.totalRetriesInARow(),
+                            retry.failure()));
+
+    private final SinkMapper<? extends OutboundMessage> mapper;
     private final ConnectRabbitMQ rabbitMQ;
-    @Nullable
-    private final PayloadDestinationMapper destinationMapper;
-    private final String queue;
+    private final SendOptions sendOptions;
+    private final RetryBackoffSpec sendErrorStrategy;
+    private final BiFunction<ConnectRabbitMQ, RoutingMetadata, Mono<?>> onSend;
 
-    private final Set<String> queues;
-
-    /**
-     * Simple constructor for immutable building
-     *
-     * @param mapper the mapper to use for payload mapping
-     * @param settings the rabbitmq settings to use for connect
-     */
-    public RabbitMQPayloadSink(final SinkMapper<byte[]> mapper, final ConnectRabbitMQSettings settings) {
-        this(
-                "default",
-                mapper,
-                new ConnectRabbitMQ(settings),
-                null
-        );
-    }
-
-    /**
-     * Internal constructor
-     *
-     * @param queue queueName to use
-     * @param mapper the mapper to use for payload mapping
-     * @param rabbitMQ the rabbitmq instance
-     * @param destinationMapper the destination mapper to use for queue names
-     */
-    private RabbitMQPayloadSink(final String queue, final SinkMapper<byte[]> mapper,
-                                final ConnectRabbitMQ rabbitMQ,
-                                final PayloadDestinationMapper destinationMapper) {
-        this.rabbitMQ = rabbitMQ;
-        this.queue = queue;
+    RabbitMQPayloadSink(SinkMapper<? extends OutboundMessage> mapper, ConnectRabbitMQ rabbitMQ, SendOptions sendOptions,
+                        RetryBackoffSpec sendErrorStrategy,
+                        BiFunction<ConnectRabbitMQ, RoutingMetadata, Mono<?>> onSend) {
         this.mapper = mapper;
-        this.destinationMapper = destinationMapper;
-        if (this.destinationMapper != null) {
-            queues = new HashSet<>();
-        } else {
-            queues = new HashSet<>(0);
-        }
+        this.rabbitMQ = rabbitMQ;
+        this.sendOptions = sendOptions;
+        this.sendErrorStrategy = sendErrorStrategy;
+        this.onSend = onSend;
     }
 
     /**
-     * Create a new {@link RabbitMQPayloadSink} with the given queue name
-     * <p>
-     * Calling this method resets the {@link PayloadDestinationMapper}
+     * Create a default sink using an {@link OutboundMessage} mapper.
      *
-     * @param queue the queue name to use
-     * @return a new immutable instance
+     * @param mapper mapper to derive {@link OutboundMessage} instances for sending
+     * @param rabbitMQ RabbitMQ broker abstraction
+     * @return a sink ready for producing payloads
      */
-    public RabbitMQPayloadSink setQueueName(final String queue) {
-        return new RabbitMQPayloadSink(
-                queue,
-                mapper,
-                rabbitMQ,
-                null
-        );
+    public static RabbitMQPayloadSink create(SinkMapper<? extends OutboundMessage> mapper,
+                                             ConnectRabbitMQ rabbitMQ) {
+        return new RabbitMQPayloadSink(mapper, rabbitMQ, new SendOptions(), DEFAULT_RETRY_STRATEGY, null);
     }
 
     /**
-     * Creates a new {@link RabbitMQPayloadSink} with the given destination mapper
-     * <p>
-     * Calling this method resets the queue name
+     * Customize the {@link SendOptions} used when producing each payload.
      *
-     * @param destinationMapper the destination mapper to use
-     * @return a new immutable instance
+     * @param sendOptions options to configure publishing
+     * @return a new instance with the given parameter
      */
-    public RabbitMQPayloadSink setDestinationMapper(final PayloadDestinationMapper destinationMapper) {
-        return new RabbitMQPayloadSink(
-                null,
-                mapper,
-                rabbitMQ,
-                destinationMapper
-        );
+    public RabbitMQPayloadSink withSendOptions(SendOptions sendOptions) {
+        return new RabbitMQPayloadSink(mapper, rabbitMQ, sendOptions, sendErrorStrategy, onSend);
+    }
+
+    /**
+     * Customize the retry strategy on sending errors.
+     *
+     * @param sendErrorStrategy a Reactor retrying strategy to be applied on producer errors
+     * @return a new instance with the given parameter
+     */
+    public RabbitMQPayloadSink withSendErrorStrategy(RetryBackoffSpec sendErrorStrategy) {
+        Objects.requireNonNull(sendErrorStrategy);
+        return new RabbitMQPayloadSink(mapper, rabbitMQ, sendOptions, sendErrorStrategy, onSend);
+    }
+
+    /**
+     * Customize the behavior to perform before a payload is sent. Can be used to declare queues, exchanges or
+     * bindings. Calling this method will override any previous function. Defaults to no action, leaving you in charge
+     * of declaring the right RabbitMQ resources for performance improvement.
+     *
+     * @param onSend a BiFunction that can be used to apply logic before a payload is sent
+     * @return a new instance with the given parameter
+     */
+    public RabbitMQPayloadSink withBeforeSendFunction(BiFunction<ConnectRabbitMQ, RoutingMetadata, Mono<?>> onSend) {
+        Objects.requireNonNull(onSend);
+        return new RabbitMQPayloadSink(mapper, rabbitMQ, sendOptions, sendErrorStrategy, onSend);
     }
 
     @Override
     public Flux<?> send(final Flux<ConnectPayload> source) {
-        if (this.destinationMapper == null) {
-            return rabbitMQ.declareOutboundQueue(queue)
-                    .thenMany(rabbitMQ.sendMany(queue, source.flatMap(mapper::apply)))
-                    .doOnError(e -> log.error("Send failed", e))
-                    .doOnSubscribe(s -> log.info("Begin sending to server"))
-                    .doFinally(s -> log.info("Sender completed after {}", s));
+        Publisher<? extends OutboundMessage> messages;
+        if (onSend == null) {
+            messages = source.flatMap(mapper::apply);
         } else {
-            return source
-                    .flatMap(payload -> Flux.from(destinationMapper.getDestination(payload)).zipWith(Mono.just(payload)))
-                    .doOnNext(tuple -> log.debug("Queue is {} for payload {}", tuple.getT1(),
-                            tuple.getT2().getPayload()))
-                    .flatMap(tuple -> declareQueue(tuple.getT1()).thenReturn(tuple))
-                    .flatMap(tuple -> Mono.zip(Mono.from(mapper.apply(tuple.getT2())), Mono.just(tuple.getT1())))
-                    .flatMap(tuple -> rabbitMQ.sendOne(tuple.getT2(), tuple.getT1()))
-                    .doOnError(e -> log.error("Send failed", e))
-                    .doOnSubscribe(s -> log.info("Begin sending to server"))
-                    .doFinally(s -> log.info("Sender completed after {}", s));
+            messages = source.flatMap(payload -> Mono.from(mapper.apply(payload)))
+                    .flatMap(message -> onSend.apply(rabbitMQ, RoutingMetadata.create(message))
+                            .thenReturn(message));
         }
-    }
-
-    /**
-     * Makes sure a "declareQueue" was called for the queue
-     *
-     * @param queue the queue name
-     * @return An empty mono when the task has been finished
-     */
-    private Mono<Void> declareQueue(final String queue) {
-        if (queues.contains(queue)) {
-            return Mono.empty();
-        }
-        queues.add(queue);
-        return rabbitMQ.declareOutboundQueue(queue)
-                .then();
+        return rabbitMQ.getSender().sendWithTypedPublishConfirms(messages)
+                .doOnSubscribe(s -> log.info("Begin sending to server"))
+                .retryWhen(sendErrorStrategy)
+                .doOnError(e -> log.error("Send failed", e))
+                .doFinally(s -> log.info("Sender completed after {}", s));
     }
 }

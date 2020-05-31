@@ -6,11 +6,14 @@ import discord4j.connect.common.SinkMapper;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
-public class RabbitMQJacksonSinkMapper implements SinkMapper<byte[]> {
+/**
+ * A mapper that can convert a {@link ConnectPayload} into a JSON-formatted byte array using Jackson.
+ */
+public class JacksonJsonSinkMapper implements SinkMapper<byte[]> {
 
     private final ObjectMapper objectMapper;
 
-    public RabbitMQJacksonSinkMapper(final ObjectMapper objectMapper) {
+    public JacksonJsonSinkMapper(final ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 

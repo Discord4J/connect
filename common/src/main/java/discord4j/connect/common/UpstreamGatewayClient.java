@@ -91,6 +91,7 @@ public class UpstreamGatewayClient implements GatewayClient {
             if (connectPayload.getShard().getIndex() != shardInfo.getIndex()) {
                 return Mono.empty();
             }
+            // TODO: reduce allocations in this area
             return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(connectPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
                     .doOnNext(senderSink::next)
                     .then();

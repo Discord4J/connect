@@ -37,8 +37,13 @@ public class RSocketShardCoordinator implements ShardCoordinator {
 
     private final ConnectRSocket socket;
 
+    @Deprecated
     public RSocketShardCoordinator(InetSocketAddress socketAddress) {
         this.socket = new ConnectRSocket("coordinator", socketAddress, ctx -> true, ReconnectOptions.create());
+    }
+
+    public static RSocketShardCoordinator createWithServerAddress(InetSocketAddress socketAddress) {
+        return new RSocketShardCoordinator(socketAddress);
     }
 
     @Override

@@ -23,10 +23,10 @@ import org.reactivestreams.Publisher;
  * A function capable of converting a type used by a {@link PayloadSource} implementation into a sequence of
  * {@link ConnectPayload} messages.
  *
- * @param <T> the source type
+ * @param <R> the source type
  */
 @FunctionalInterface
-public interface SourceMapper<T> {
+public interface SourceMapper<R> {
 
     /**
      * Transform a single source into a {@link Publisher} of {@link ConnectPayload} instances.
@@ -34,5 +34,5 @@ public interface SourceMapper<T> {
      * @param source the source element provided by a {@link PayloadSource}
      * @return a reactive sequence of {@link ConnectPayload} messages
      */
-    Publisher<ConnectPayload> apply(T source);
+    Publisher<ConnectPayload> apply(R source);
 }

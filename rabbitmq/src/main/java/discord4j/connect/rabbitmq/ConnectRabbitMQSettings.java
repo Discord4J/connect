@@ -6,10 +6,13 @@ import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ReceiverOptions;
 import reactor.rabbitmq.SenderOptions;
 
+/**
+ * A set of commonly used options for connecting to a RabbitMQ broker.
+ */
 public class ConnectRabbitMQSettings {
 
     /**
-     * Creates a new RabbitMQ settings object
+     * Creates a new RabbitMQ settings object.
      *
      * @return settings object
      */
@@ -32,7 +35,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Set the RabbitMQs host-and-port list as {@link Address} array
+     * Set the RabbitMQs host-and-port list as {@link Address} array.
      *
      * @param addresses array of {@link Address} to which RabbitMQ nodes the client should connect
      * @return this builder
@@ -44,7 +47,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Sets the RabbitMQs host list with default ports
+     * Sets the RabbitMQs host list with default ports.
      *
      * @param hosts array of hostnames to which RabbitMQ nodes the client should connect on default port
      * @return this builder
@@ -58,7 +61,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Sets the RabbitMQs host and port
+     * Sets the RabbitMQs host and port.
      *
      * @param host hostname to connect to
      * @param port port to connect to
@@ -69,8 +72,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Sets the RabbitMQs host
-     * This method will use the default port
+     * Sets the RabbitMQs host. This method will use the default port.
      *
      * @param host hostname to connect to
      * @return this builder
@@ -80,7 +82,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * The username to use for authorization
+     * The username to use for authorization.
      *
      * @param user username for authorization
      * @return this builder
@@ -92,7 +94,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * The password to use for authorization
+     * The password to use for authorization.
      *
      * @param password password for authorization
      * @return this builder
@@ -104,8 +106,8 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Uses a specific scheduler for connection subscriptions
-     *
+     * Uses a specific scheduler for connection subscriptions.
+     * <p>
      * Set the scheduler to {@code null} to create one scheduler per instance
      *
      * @param scheduler the scheduler to use
@@ -118,9 +120,9 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Uses a specific scheduler for resource management
-     *
-     * Set the scheduler to {@code null} to create one scheduler per instance
+     * Uses a specific scheduler for resource management.
+     * <p>
+     * Set the scheduler to {@code null} to create one scheduler per instance.
      *
      * @param scheduler the scheduler to use
      * @return this builder
@@ -131,7 +133,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Internal method to retrieve the whole settings object for the RabbitMQ sender
+     * Internal method to retrieve the whole settings object for the RabbitMQ sender.
      *
      * @return SenderOptions
      */
@@ -140,7 +142,7 @@ public class ConnectRabbitMQSettings {
     }
 
     /**
-     * Internal method to retrieve the whole settings object for the RabbitMQ receiver
+     * Internal method to retrieve the whole settings object for the RabbitMQ receiver.
      *
      * @return ReceiverOptions
      */

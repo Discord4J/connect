@@ -11,6 +11,11 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.nio.charset.StandardCharsets;
 
+
+/**
+ * A mapper that can read a binary source and extract a {@link ConnectPayload} from it. Emits an error if the
+ * deserialization fails.
+ */
 public class RabbitMQBinarySourceMapper implements SourceMapper<byte[]> {
 
     /*
@@ -35,9 +40,9 @@ public class RabbitMQBinarySourceMapper implements SourceMapper<byte[]> {
                 dataInputStream.read(payloadData, 0, payloadLength);
                 final String payload = new String(payloadData, StandardCharsets.UTF_8);
                 return new ConnectPayload(
-                    ShardInfo.create(shardIndex, shardCount),
-                    SessionInfo.create(sessionId, sessionSeq),
-                    payload
+                        ShardInfo.create(shardIndex, shardCount),
+                        SessionInfo.create(sessionId, sessionSeq),
+                        payload
                 );
             }
         });

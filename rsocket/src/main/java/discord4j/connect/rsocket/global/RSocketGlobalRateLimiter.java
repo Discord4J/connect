@@ -49,8 +49,13 @@ public class RSocketGlobalRateLimiter implements GlobalRateLimiter {
 
     private final ConnectRSocket socket;
 
+    @Deprecated
     public RSocketGlobalRateLimiter(InetSocketAddress socketAddress) {
         this.socket = new ConnectRSocket("grl", socketAddress, ctx -> true, ReconnectOptions.create());
+    }
+
+    public static RSocketGlobalRateLimiter createWithServerAddress(InetSocketAddress socketAddress) {
+        return new RSocketGlobalRateLimiter(socketAddress);
     }
 
     @Override

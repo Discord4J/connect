@@ -6,11 +6,15 @@ import discord4j.connect.common.SourceMapper;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
-public class RabbitMQJacksonSourceMapper implements SourceMapper<byte[]> {
+/**
+ * A mapper that can convert a byte array source into a {@link ConnectPayload} using Jackson, if the format is JSON. An
+ * error is emitted if the deserialization fails.
+ */
+public class JacksonJsonSourceMapper implements SourceMapper<byte[]> {
 
     private final ObjectMapper objectMapper;
 
-    public RabbitMQJacksonSourceMapper(final ObjectMapper objectMapper) {
+    public JacksonJsonSourceMapper(final ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
