@@ -78,7 +78,7 @@ public class RSocketRouter implements Router {
         this.reactorResources = Objects.requireNonNull(routerOptions.getReactorResources(), "reactorResources");
         this.responseFunctions = Objects.requireNonNull(routerOptions.getResponseTransformers(), "responseFunctions");
         this.httpClient = new DiscordWebClient(reactorResources.getHttpClient(),
-                routerOptions.getExchangeStrategies(), routerOptions.getToken(), responseFunctions);
+                routerOptions.getExchangeStrategies(), "Bot", routerOptions.getToken(), responseFunctions);
         this.globalRateLimiter = Objects.requireNonNull(routerOptions.getGlobalRateLimiter(), "globalRateLimiter");
         this.requestTransportMapper = Objects.requireNonNull(routerOptions.getRequestTransportMapper(),
                 "requestTransportMapper");
