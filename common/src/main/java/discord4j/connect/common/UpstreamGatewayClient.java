@@ -18,10 +18,7 @@
 package discord4j.connect.common;
 
 import discord4j.discordjson.json.gateway.Dispatch;
-import discord4j.gateway.DefaultGatewayClient;
-import discord4j.gateway.GatewayClient;
-import discord4j.gateway.SessionInfo;
-import discord4j.gateway.ShardInfo;
+import discord4j.gateway.*;
 import discord4j.gateway.json.GatewayPayload;
 import discord4j.gateway.payload.PayloadReader;
 import io.netty.buffer.ByteBuf;
@@ -148,8 +145,13 @@ public class UpstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public boolean isConnected() {
+    public Mono<Boolean> isConnected() {
         return delegate.isConnected();
+    }
+
+    @Override
+    public Flux<GatewayConnection.State> stateEvents() {
+        return delegate.stateEvents();
     }
 
     @Override

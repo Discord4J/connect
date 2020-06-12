@@ -20,6 +20,7 @@ package discord4j.connect.common;
 import discord4j.discordjson.json.gateway.Dispatch;
 import discord4j.discordjson.json.gateway.Opcode;
 import discord4j.gateway.GatewayClient;
+import discord4j.gateway.GatewayConnection;
 import discord4j.gateway.SessionInfo;
 import discord4j.gateway.ShardInfo;
 import discord4j.gateway.json.GatewayPayload;
@@ -187,9 +188,14 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public boolean isConnected() {
+    public Mono<Boolean> isConnected() {
         // TODO: add support for DownstreamGatewayClient::isConnected
-        return true;
+        return Mono.just(true);
+    }
+
+    @Override
+    public Flux<GatewayConnection.State> stateEvents() {
+        return Flux.empty();
     }
 
     @Override
