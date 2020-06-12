@@ -25,7 +25,7 @@ ext {
 
     discord4j_core_version = '3.1.0-SNAPSHOT'
     stores_redis_version = '3.1.1'
-    rsocket_version = '1.0.0'
+    rsocket_version = '1.0.1'
     rabbitmq_version = '1.4.2.RELEASE'
     jsr305_version = '3.0.2'
     junit_version = '4.13'
