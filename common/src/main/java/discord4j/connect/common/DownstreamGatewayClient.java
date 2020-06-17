@@ -31,6 +31,7 @@ import discord4j.gateway.payload.PayloadWriter;
 import discord4j.gateway.retry.GatewayStateChange;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.util.IllegalReferenceCountException;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.*;
 import reactor.core.scheduler.Schedulers;
@@ -126,12 +127,14 @@ public class DownstreamGatewayClient implements GatewayClient {
             // Receive from user -> Send to upstream
             Mono<Void> senderFuture =
                     sink.send(sender.flatMap(payload -> Flux.from(payloadWriter.write(payload))
-                            .map(buf -> buf.toString(StandardCharsets.UTF_8))
-                            .map(str -> {
-                                ConnectPayload cp = new ConnectPayload(getShardInfo(payload), getSessionInfo(), str);
+                            .map(buf -> {
+                                ConnectPayload cp = new ConnectPayload(getShardInfo(payload), getSessionInfo(),
+                                        buf.toString(StandardCharsets.UTF_8));
+                                safeRelease(buf);
                                 logPayload(senderLog, cp);
                                 return cp;
-                            })))
+                            })
+                            .doOnDiscard(ByteBuf.class, DownstreamGatewayClient::safeRelease)))
                             .subscribeOn(Schedulers.newSingle("payload-sender"))
                             .then();
 
@@ -141,6 +144,18 @@ public class DownstreamGatewayClient implements GatewayClient {
                     .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
                     .then();
         });
+    }
+
+    private static void safeRelease(ByteBuf buf) {
+        if (buf.refCnt() > 0) {
+            try {
+                buf.release();
+            } catch (IllegalReferenceCountException e) {
+                if (log.isDebugEnabled()) {
+                    log.debug("", e);
+                }
+            }
+        }
     }
 
     private void logPayload(Logger logger, ConnectPayload payload) {
