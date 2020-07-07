@@ -5,6 +5,8 @@
     <logger name="reactor.retry" level="INFO"/>
     <logger name="io.lettuce" level="INFO"/>
     <logger name="io.rsocket" level="INFO"/>
+    <logger name="discord4j.limiter" level="TRACE"/>
+    <logger name="discord4j.connect.rsocket.shared.servers" level="TRACE"/>
     <logger name="discord4j.connect.rsocket.gateway.RSocketPayloadServer" level="DEBUG"/>
     <logger name="discord4j.connect.common.DownstreamGatewayClient" level="INFO"/>
 <!--    <logger name="discord4j.gateway.protocol.sender" level="TRACE"/>-->

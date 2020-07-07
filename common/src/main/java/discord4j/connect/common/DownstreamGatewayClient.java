@@ -17,6 +17,8 @@
 
 package discord4j.connect.common;
 
+import discord4j.common.close.CloseStatus;
+import discord4j.common.close.DisconnectBehavior;
 import discord4j.discordjson.json.gateway.Dispatch;
 import discord4j.discordjson.json.gateway.Opcode;
 import discord4j.gateway.GatewayClient;
@@ -222,7 +224,8 @@ public class DownstreamGatewayClient implements GatewayClient {
     @Override
     public Mono<Void> close(boolean allowResume) {
         return Mono.fromRunnable(() -> {
-            dispatchSink.next(GatewayStateChange.disconnected());
+            dispatchSink.next(GatewayStateChange.disconnected(DisconnectBehavior.stop(null),
+                    allowResume ? CloseStatus.ABNORMAL_CLOSE : CloseStatus.NORMAL_CLOSE));
             senderSink.complete();
             closeFuture.onComplete();
         });

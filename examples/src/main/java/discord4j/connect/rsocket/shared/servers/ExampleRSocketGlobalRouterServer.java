@@ -17,14 +17,14 @@
 
 package discord4j.connect.rsocket.shared.servers;
 
-import discord4j.connect.rsocket.global.RSocketGlobalRouterServer;
 import discord4j.connect.Constants;
+import discord4j.connect.rsocket.global.RSocketGlobalRouterServer;
 import discord4j.rest.request.BucketGlobalRateLimiter;
 import discord4j.rest.request.RequestQueueFactory;
 import io.rsocket.transport.netty.server.CloseableChannel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.Logger;
+import reactor.util.Loggers;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -35,7 +35,7 @@ import java.time.Duration;
  */
 public class ExampleRSocketGlobalRouterServer {
 
-    private static final Logger log = LoggerFactory.getLogger(ExampleRSocketGlobalRouterServer.class);
+    private static final Logger log = Loggers.getLogger(ExampleRSocketGlobalRouterServer.class);
 
     public static void main(String[] args) {
         // this server combines a Router and a GlobalRateLimiter servers

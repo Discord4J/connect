@@ -37,8 +37,6 @@ import discord4j.core.event.dispatch.DispatchEventMapper;
 import discord4j.core.object.presence.Presence;
 import discord4j.core.shard.InvalidationStrategy;
 import discord4j.core.shard.ShardingStrategy;
-import discord4j.gateway.intent.Intent;
-import discord4j.gateway.intent.IntentSet;
 import discord4j.store.api.noop.NoOpStoreService;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.QueueSpecification;
@@ -112,10 +110,10 @@ public class ExampleRabbitLocalCacheLeader {
                 .setSharding(shardingStrategy)
                 // Properly coordinate IDENTIFY attempts across all shards
                 .setShardCoordinator(RSocketShardCoordinator.createWithServerAddress(coordinatorServerAddress))
-                .setDisabledIntents(IntentSet.of(
-                        Intent.GUILD_PRESENCES,
-                        Intent.GUILD_MESSAGE_TYPING,
-                        Intent.DIRECT_MESSAGE_TYPING))
+//                .setDisabledIntents(IntentSet.of(
+//                        Intent.GUILD_PRESENCES,
+//                        Intent.GUILD_MESSAGE_TYPING,
+//                        Intent.DIRECT_MESSAGE_TYPING))
                 .setInitialStatus(s -> Presence.invisible())
                 // Disable invalidation strategy, event publishing and entity cache to save memory usage
                 .setDispatchEventMapper(DispatchEventMapper.discardEvents())
