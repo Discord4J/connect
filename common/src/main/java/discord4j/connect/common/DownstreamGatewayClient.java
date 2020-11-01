@@ -39,6 +39,7 @@ import reactor.core.publisher.*;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -143,7 +144,7 @@ public class DownstreamGatewayClient implements GatewayClient {
             return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture)
                     .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
                     .doOnCancel(() -> close(false))
-                    .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
+                    .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(2)).maxBackoff(Duration.ofSeconds(30)))
                     .then();
         });
     }

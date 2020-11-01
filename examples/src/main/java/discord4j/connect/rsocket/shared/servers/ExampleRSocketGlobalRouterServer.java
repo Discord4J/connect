@@ -25,6 +25,7 @@ import io.rsocket.transport.netty.server.CloseableChannel;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import reactor.util.retry.Retry;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -47,7 +48,7 @@ public class ExampleRSocketGlobalRouterServer {
         // start the server
         routerServer.start()
                 .doOnNext(cc -> log.info("Started global router server at {}", cc.address()))
-                .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(1), Duration.ofMinutes(1))
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(1)).maxBackoff(Duration.ofMinutes(1)))
                 .flatMap(CloseableChannel::onClose)
                 .block();
     }

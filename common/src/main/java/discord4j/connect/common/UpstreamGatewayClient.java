@@ -30,6 +30,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -67,13 +68,15 @@ public class UpstreamGatewayClient implements GatewayClient {
                                 .doFinally(s -> buf.release())))
                         .subscribeOn(Schedulers.newSingle("payload-sender"))
                         .doOnError(t -> log.error("Sender error", t))
-                        .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
+                        .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(2))
+                                .maxBackoff(Duration.ofSeconds(30)))
                         .then();
 
         // Receive from downstream --> Send to Discord
         Mono<Void> receiverFuture = source.receive(payloadProcessor())
                 .doOnError(t -> log.error("Receiver error", t))
-                .retryBackoff(Long.MAX_VALUE, Duration.ofSeconds(2), Duration.ofSeconds(30))
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(2))
+                        .maxBackoff(Duration.ofSeconds(30)))
                 .then();
 
         return Mono.zip(senderFuture, receiverFuture, delegate.execute(gatewayUrl)).then();

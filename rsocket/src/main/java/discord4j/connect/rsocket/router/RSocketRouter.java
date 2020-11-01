@@ -35,10 +35,10 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.UnicastProcessor;
 import reactor.core.scheduler.Scheduler;
 import reactor.netty.http.client.HttpClientResponse;
-import reactor.retry.Retry;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 import reactor.util.context.Context;
+import reactor.util.retry.Retry;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -86,8 +86,8 @@ public class RSocketRouter implements Router {
 
     @Override
     public DiscordWebResponse exchange(DiscordWebRequest request) {
-        return new DiscordWebResponse(Mono.defer(Mono::subscriberContext)
-                .flatMap(ctx -> {
+        return new DiscordWebResponse(
+                Mono.deferWithContext(ctx -> {
                     ClientRequest clientRequest = new ClientRequest(request);
                     String reqId = clientRequest.getId();
                     String bucket = BucketKey.of(request).toString();
@@ -194,9 +194,9 @@ public class RSocketRouter implements Router {
                     .subscriberContext(ctx -> ctx.putAll(context)
                             .put(LogUtil.KEY_REQUEST_ID, request.getId())
                             .put(LogUtil.KEY_BUCKET_ID, id.toString()))
-                    .retryWhen(rateLimitRetryOperator::apply)
+                    .retryWhen(Retry.withThrowable(rateLimitRetryOperator::apply))
                     .transform(getResponseTransformers(request.getDiscordRequest()))
-                    .retryWhen(serverErrorRetryFactory())
+                    .retryWhen(Retry.withThrowable(serverErrorRetryFactory()))
                     .checkpoint("Request to " + request.getDescription() + " [RSocketRouter]");
         }
 
@@ -209,8 +209,8 @@ public class RSocketRouter implements Router {
                     .orElse(mono -> mono);
         }
 
-        private Retry<?> serverErrorRetryFactory() {
-            return Retry.onlyIf(ClientException.isRetryContextStatusCode(500, 502, 503, 504))
+        private reactor.retry.Retry<?> serverErrorRetryFactory() {
+            return reactor.retry.Retry.onlyIf(ClientException.isRetryContextStatusCode(500, 502, 503, 504))
                     .exponentialBackoffWithJitter(Duration.ofSeconds(2), Duration.ofSeconds(30))
                     .doOnRetry(ctx -> {
                         if (log.isTraceEnabled()) {
