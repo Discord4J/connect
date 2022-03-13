@@ -23,13 +23,14 @@ ext {
         jdk_javadoc = "https://docs.oracle.com/en/java/javase/$jdk/docs/api/".toString()
     }
 
-    discord4j_core_version = '3.1.8'
-    stores_redis_version = '3.1.8'
+    discord4j_core_version = '3.2.1'
+    stores_redis_version = '3.2.1'
     rsocket_version = '1.0.5'
     rabbitmq_version = '1.4.5.RELEASE'
+    amqp_version = '5.13.1'
     jsr305_version = '3.0.2'
     junit_version = '4.13'
-    logback_version = '1.2.3'
+    logback_version = '1.2.10'
 
     isJitpack = "true" == System.getenv("JITPACK")
     isRelease = !version.toString().endsWith('-SNAPSHOT')

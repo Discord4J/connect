@@ -49,7 +49,8 @@ public class RSocketRouterOptions extends RouterOptions {
                 parent.getExchangeStrategies(),
                 parent.getResponseTransformers(),
                 parent.getGlobalRateLimiter(),
-                parent.getRequestQueueFactory());
+                parent.getRequestQueueFactory(),
+                parent.getDiscordBaseUrl());
 
         this.requestTransportMapper = Objects.requireNonNull(requestTransportMapper, "requestTransportMapper");
     }

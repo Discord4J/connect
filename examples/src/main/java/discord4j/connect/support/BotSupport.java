@@ -6,7 +6,7 @@ import discord4j.core.event.domain.lifecycle.ReadyEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.object.entity.Message;
 import discord4j.core.object.entity.User;
-import discord4j.core.object.presence.Presence;
+import discord4j.core.object.presence.ClientPresence;
 import discord4j.discordjson.json.ApplicationInfoData;
 import discord4j.discordjson.json.ImmutableMessageCreateRequest;
 import discord4j.discordjson.possible.Possible;
@@ -106,6 +106,10 @@ public class BotSupport {
                                         .blockOptional()
                                         .orElse(-1L)
                                         .toString(), false);
+                                spec.addField("Application-Info", event.getClient().getApplicationInfo()
+                                    .blockOptional()
+                                    .orElseThrow(RuntimeException::new)
+                                    .toString(), false);
                             })))
                     .then();
         }
@@ -121,13 +125,13 @@ public class BotSupport {
                     .map(content -> {
                         String status = content.substring("!status ".length());
                         if (status.equalsIgnoreCase("online")) {
-                            return Presence.online();
+                            return ClientPresence.online();
                         } else if (status.equalsIgnoreCase("dnd")) {
-                            return Presence.doNotDisturb();
+                            return ClientPresence.doNotDisturb();
                         } else if (status.equalsIgnoreCase("idle")) {
-                            return Presence.idle();
+                            return ClientPresence.idle();
                         } else if (status.equalsIgnoreCase("invisible")) {
-                            return Presence.invisible();
+                            return ClientPresence.invisible();
                         } else {
                             throw new IllegalArgumentException("Invalid argument");
                         }

@@ -31,13 +31,14 @@ import discord4j.rest.response.ResponseFunction;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import io.rsocket.util.DefaultPayload;
-import reactor.core.publisher.Mono;
-import reactor.core.publisher.UnicastProcessor;
+import reactor.core.publisher.*;
 import reactor.core.scheduler.Scheduler;
 import reactor.netty.http.client.HttpClientResponse;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import reactor.util.annotation.NonNullApi;
 import reactor.util.context.Context;
+import reactor.util.context.ContextView;
 import reactor.util.retry.Retry;
 
 import java.net.InetSocketAddress;
@@ -47,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
 import static discord4j.common.LogUtil.format;
@@ -78,7 +80,8 @@ public class RSocketRouter implements Router {
         this.reactorResources = Objects.requireNonNull(routerOptions.getReactorResources(), "reactorResources");
         this.responseFunctions = Objects.requireNonNull(routerOptions.getResponseTransformers(), "responseFunctions");
         this.httpClient = new DiscordWebClient(reactorResources.getHttpClient(),
-                routerOptions.getExchangeStrategies(), "Bot", routerOptions.getToken(), responseFunctions);
+                routerOptions.getExchangeStrategies(), "Bot", routerOptions.getToken(),
+                responseFunctions, routerOptions.getDiscordBaseUrl());
         this.globalRateLimiter = Objects.requireNonNull(routerOptions.getGlobalRateLimiter(), "globalRateLimiter");
         this.requestTransportMapper = Objects.requireNonNull(routerOptions.getRequestTransportMapper(),
                 "requestTransportMapper");
@@ -87,7 +90,7 @@ public class RSocketRouter implements Router {
     @Override
     public DiscordWebResponse exchange(DiscordWebRequest request) {
         return new DiscordWebResponse(
-                Mono.deferWithContext(ctx -> {
+                Mono.deferContextual(ctx -> {
                     ClientRequest clientRequest = new ClientRequest(request);
                     String reqId = clientRequest.getId();
                     String bucket = BucketKey.of(request).toString();
@@ -96,8 +99,11 @@ public class RSocketRouter implements Router {
                     ConnectRSocket socket = getSocket(socketAddress);
                     return socket.withSocket(
                             rSocket -> {
-                                UnicastProcessor<Payload> toLeader = UnicastProcessor.create();
-                                toLeader.onNext(requestPayload(bucket, reqId));
+                                Sinks.Many<Payload> toLeaderSink = Sinks.many().unicast().onBackpressureBuffer();
+                                Flux<Payload> toLeader =  toLeaderSink.asFlux();
+                                while (toLeaderSink.tryEmitNext(requestPayload(bucket, reqId)).isFailure()) {
+                                    LockSupport.parkNanos(10);
+                                }
                                 return rSocket.requestChannel(toLeader)
                                         .onErrorMap(Discord4JConnectException::new)
                                         .flatMap(payload -> {
@@ -106,8 +112,10 @@ public class RSocketRouter implements Router {
                                                 return executor.exchange(clientRequest, rSocket, ctx)
                                                         .doOnTerminate(() -> {
                                                             log.debug("[B:{}, R:{}] Request completed", bucket, reqId);
-                                                            toLeader.onNext(donePayload(bucket, reqId));
-                                                            toLeader.onComplete();
+                                                            while (toLeaderSink.tryEmitNext(donePayload(bucket, reqId)).isFailure()) {
+                                                                LockSupport.parkNanos(10);
+                                                            }
+                                                            toLeaderSink.tryEmitComplete();
                                                         });
                                             } else {
                                                 log.warn("Unknown payload: {}", content);
@@ -152,16 +160,16 @@ public class RSocketRouter implements Router {
                 HttpClientResponse httpResponse = response.getHttpResponse();
                 if (log.isDebugEnabled()) {
                     Instant requestTimestamp =
-                            Instant.ofEpochMilli(httpResponse.currentContext().get(DiscordWebClient.KEY_REQUEST_TIMESTAMP));
+                            Instant.ofEpochMilli(httpResponse.currentContextView().get(DiscordWebClient.KEY_REQUEST_TIMESTAMP));
                     Duration responseTime = Duration.between(requestTimestamp, Instant.now());
-                    LogUtil.traceDebug(log, trace -> format(httpResponse.currentContext(),
+                    LogUtil.traceDebug(log, trace -> format(httpResponse.currentContextView(),
                             "Read " + httpResponse.status() + " in " + responseTime + (!trace ? "" :
                                     " with headers: " + httpResponse.responseHeaders())));
                 }
                 Duration nextReset = strategy.apply(httpResponse);
                 if (!nextReset.isZero()) {
                     if (log.isDebugEnabled()) {
-                        log.debug(format(httpResponse.currentContext(), "Delaying next request by {}"), nextReset);
+                        log.debug(format(httpResponse.currentContextView(), "Delaying next request by {}"), nextReset);
                     }
                     sleepTime = nextReset;
                 }
@@ -172,7 +180,7 @@ public class RSocketRouter implements Router {
                     long retryAfter = Long.parseLong(httpResponse.responseHeaders().get("Retry-After"));
                     Duration fixedBackoff = Duration.ofMillis(retryAfter);
                     action = globalRateLimiter.rateLimitFor(fixedBackoff)
-                            .doOnTerminate(() -> log.debug(format(httpResponse.currentContext(),
+                            .doOnTerminate(() -> log.debug(format(httpResponse.currentContextView(),
                                     "Globally rate limited for {}"), fixedBackoff));
                 }
                 if (httpResponse.status().code() >= 400) {
@@ -183,17 +191,16 @@ public class RSocketRouter implements Router {
             };
         }
 
-        public Mono<ClientResponse> exchange(ClientRequest request, RSocket leaderSocket, Context context) {
+        public Mono<ClientResponse> exchange(ClientRequest request, RSocket leaderSocket, ContextView context) {
             return Mono.just(request)
-                    .doOnEach(s -> log.trace(format(s.getContext(), ">> {}"), s))
-                    .flatMap(httpClient::exchange)
-                    .flatMap(rateLimitHandler)
-                    .doOnEach(s -> log.trace(format(s.getContext(), "<< {}"), s))
-                    .flatMap(response -> leaderSocket.requestResponse(limitPayload(id.toString(), sleepTime.toMillis()))
-                            .thenReturn(response))
-                    .subscriberContext(ctx -> ctx.putAll(context)
-                            .put(LogUtil.KEY_REQUEST_ID, request.getId())
-                            .put(LogUtil.KEY_BUCKET_ID, id.toString()))
+                .doOnEach(s -> log.trace(format(s.getContextView(), ">> {}"), s))
+                .flatMap(httpClient::exchange)
+                .flatMap(rateLimitHandler)
+                .doOnEach(s -> log.trace(format(s.getContextView(), "<< {}"), s))
+                .flatMap(response -> leaderSocket.requestResponse(limitPayload(id.toString(), sleepTime.toMillis()))
+                    .thenReturn(response)).contextWrite(ctx -> ctx.putAll(context)
+                    .put(LogUtil.KEY_REQUEST_ID, request.getId())
+                    .put(LogUtil.KEY_BUCKET_ID, id.toString()))
                     .retryWhen(Retry.withThrowable(rateLimitRetryOperator::apply))
                     .transform(getResponseTransformers(request.getDiscordRequest()))
                     .retryWhen(Retry.withThrowable(serverErrorRetryFactory()))

@@ -18,10 +18,13 @@
 package discord4j.connect.rabbitmq.shared;
 
 import discord4j.common.JacksonResources;
+import discord4j.common.store.Store;
+import discord4j.common.store.legacy.LegacyStoreLayout;
 import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.UpstreamGatewayClient;
 import discord4j.connect.rabbitmq.ConnectRabbitMQ;
+import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
 import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSink;
 import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSource;
 import discord4j.connect.rabbitmq.gateway.RabbitMQSinkMapper;
@@ -34,9 +37,10 @@ import discord4j.connect.support.LogoutHttpServer;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.dispatch.DispatchEventMapper;
-import discord4j.core.object.presence.Presence;
-import discord4j.core.shard.InvalidationStrategy;
+import discord4j.core.object.presence.ClientPresence;
 import discord4j.core.shard.ShardingStrategy;
+import discord4j.gateway.intent.Intent;
+import discord4j.gateway.intent.IntentSet;
 import discord4j.store.api.noop.NoOpStoreService;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.QueueSpecification;
@@ -69,7 +73,7 @@ public class ExampleRabbitLocalCacheLeader {
          *
          * We will use RSocket GRS in this example: see ExampleRSocketGlobalRouterServer
          */
-        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_PORT);
+        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_HOST, Constants.GLOBAL_ROUTER_SERVER_PORT);
 
         /*
          * Define the location of the Shard Coordinator Server (SCS). An SCS establishes predictable ordering across
@@ -77,7 +81,7 @@ public class ExampleRabbitLocalCacheLeader {
          *
          * We will use RSocket SCS in this example: see ExampleRSocket
          */
-        InetSocketAddress coordinatorServerAddress = new InetSocketAddress(Constants.SHARD_COORDINATOR_SERVER_PORT);
+        InetSocketAddress coordinatorServerAddress = new InetSocketAddress(Constants.SHARD_COORDINATOR_SERVER_HOST, Constants.SHARD_COORDINATOR_SERVER_PORT);
 
         /*
          * Create a default factory for working with Jackson, this can be reused across the application.
@@ -97,39 +101,41 @@ public class ExampleRabbitLocalCacheLeader {
          * - RabbitMQSourceMapper will be used to CONSUME payloads from other nodes
          *      - "createBinarySource" will read binary messages
          */
-        ConnectRabbitMQ rabbitMQ = ConnectRabbitMQ.createDefault();
+        ConnectRabbitMQ rabbitMQ;
+        if (!Constants.RABBITMQ_HOST.isEmpty()) {
+            ConnectRabbitMQSettings settings = ConnectRabbitMQSettings.create().withAddress(Constants.RABBITMQ_HOST, Constants.RABBITMQ_PORT);
+            rabbitMQ = ConnectRabbitMQ.createFromSettings(settings);
+        } else {
+            rabbitMQ = ConnectRabbitMQ.createDefault();
+        }
         RabbitMQSinkMapper sink = RabbitMQSinkMapper.createBinarySinkToDirect("payload");
         RabbitMQSourceMapper source = RabbitMQSourceMapper.createBinarySource();
 
-        GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
-                .setJacksonResources(jackson)
-                .setGlobalRateLimiter(RSocketGlobalRateLimiter.createWithServerAddress(globalRouterServerAddress))
-                .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
-                .build(RSocketRouter::new)
-                .gateway()
-                .setSharding(shardingStrategy)
-                // Properly coordinate IDENTIFY attempts across all shards
-                .setShardCoordinator(RSocketShardCoordinator.createWithServerAddress(coordinatorServerAddress))
-//                .setDisabledIntents(IntentSet.of(
-//                        Intent.GUILD_PRESENCES,
-//                        Intent.GUILD_MESSAGE_TYPING,
-//                        Intent.DIRECT_MESSAGE_TYPING))
-                .setInitialStatus(s -> Presence.invisible())
-                // Disable invalidation strategy, event publishing and entity cache to save memory usage
-                .setDispatchEventMapper(DispatchEventMapper.discardEvents())
-                .setStoreService(new NoOpStoreService())
-                .setInvalidationStrategy(InvalidationStrategy.disable())
-                // Turn this gateway into a RabbitMQ-based one
-                .setExtraOptions(o -> new ConnectGatewayOptions(o,
-                        RabbitMQPayloadSink.create(sink, rabbitMQ)
-                                .withBeforeSendFunction((rmq, meta) -> rmq.getSender()
-                                        .declare(QueueSpecification.queue(meta.getRoutingKey()))
-                                        .onErrorResume(t -> Mono.empty())),
-                        RabbitMQPayloadSource.create(source, rabbitMQ, "gateway")))
-                // UpstreamGatewayClient connects to Discord Gateway and forwards payloads to other nodes
-                .login(UpstreamGatewayClient::new)
-                .blockOptional()
-                .orElseThrow(RuntimeException::new);
+        GatewayDiscordClient client = DiscordClient.builder(System.getenv("BOT_TOKEN"))
+            .setJacksonResources(jackson)
+            .setGlobalRateLimiter(RSocketGlobalRateLimiter.createWithServerAddress(globalRouterServerAddress))
+            .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
+            .build(RSocketRouter::new)
+            .gateway()
+            .setSharding(shardingStrategy)
+            // Properly coordinate IDENTIFY attempts across all shards
+            .setShardCoordinator(RSocketShardCoordinator.createWithServerAddress(coordinatorServerAddress)).setInitialPresence(s -> ClientPresence.invisible())
+            // Disable invalidation strategy, event publishing and entity cache to save memory usage
+            .setDispatchEventMapper(DispatchEventMapper.discardEvents())
+            .setStore(Store.fromLayout(LegacyStoreLayout.of(new NoOpStoreService())))
+//                .setInvalidationStrategy(InvalidationStrategy.disable())
+            .setEnabledIntents(IntentSet.all())
+            // Turn this gateway into a RabbitMQ-based one
+            .setExtraOptions(o -> new ConnectGatewayOptions(o,
+                    RabbitMQPayloadSink.create(sink, rabbitMQ)
+                            .withBeforeSendFunction((rmq, meta) -> rmq.getSender()
+                                    .declare(QueueSpecification.queue(meta.getRoutingKey()))
+                                    .onErrorResume(t -> Mono.empty())),
+                    RabbitMQPayloadSource.create(source, rabbitMQ, "gateway")))
+            // UpstreamGatewayClient connects to Discord Gateway and forwards payloads to other nodes
+            .login(UpstreamGatewayClient::new)
+            .blockOptional()
+            .orElseThrow(RuntimeException::new);
 
         LogoutHttpServer.startAsync(client);
         client.onDisconnect().block();

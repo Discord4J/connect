@@ -18,10 +18,13 @@
 package discord4j.connect.rabbitmq.shared;
 
 import discord4j.common.JacksonResources;
+import discord4j.common.store.Store;
+import discord4j.common.store.legacy.LegacyStoreLayout;
 import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.DownstreamGatewayClient;
 import discord4j.connect.rabbitmq.ConnectRabbitMQ;
+import discord4j.connect.rabbitmq.ConnectRabbitMQSettings;
 import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSink;
 import discord4j.connect.rabbitmq.gateway.RabbitMQPayloadSource;
 import discord4j.connect.rabbitmq.gateway.RabbitMQSinkMapper;
@@ -67,7 +70,7 @@ public class ExampleRabbitDistributedCacheWorker {
          *
          * We will use RSocket GRS in this example: see ExampleRSocketGlobalRouterServer
          */
-        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_PORT);
+        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_HOST, Constants.GLOBAL_ROUTER_SERVER_PORT);
 
         /*
          * Define the redis server that will be used as entity cache.
@@ -94,11 +97,17 @@ public class ExampleRabbitDistributedCacheWorker {
          * - RabbitMQSourceMapper will be used to CONSUME payloads from other nodes
          *      - "createBinarySource" will read binary messages
          */
-        ConnectRabbitMQ rabbitMQ = ConnectRabbitMQ.createDefault();
+        ConnectRabbitMQ rabbitMQ;
+        if (!Constants.RABBITMQ_HOST.isEmpty()) {
+            ConnectRabbitMQSettings settings = ConnectRabbitMQSettings.create().withAddress(Constants.RABBITMQ_HOST, Constants.RABBITMQ_PORT);
+            rabbitMQ = ConnectRabbitMQ.createFromSettings(settings);
+        } else {
+            rabbitMQ = ConnectRabbitMQ.createDefault();
+        }
         RabbitMQSinkMapper sinkMapper = RabbitMQSinkMapper.createBinarySinkToDirect("gateway");
         RabbitMQSourceMapper sourceMapper = RabbitMQSourceMapper.createBinarySource();
 
-        GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
+        GatewayDiscordClient client = DiscordClient.builder(System.getenv("BOT_TOKEN"))
                 .setJacksonResources(jackson)
                 .setGlobalRateLimiter(RSocketGlobalRateLimiter.createWithServerAddress(globalRouterServerAddress))
                 .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
@@ -108,9 +117,9 @@ public class ExampleRabbitDistributedCacheWorker {
                 // Gateway member requests are handled upstream, so disable them here
                 .setMemberRequestFilter(MemberRequestFilter.none())
                 // Set the entity cache, but wrap with a read-only decorator
-                .setStoreService(new ReadOnlyStoreService(RedisStoreService.builder()
+                .setStore(Store.fromLayout(LegacyStoreLayout.of(new ReadOnlyStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
-                        .build()))
+                        .build()))))
                 // Turn this gateway into a RabbitMQ-based one
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         RabbitMQPayloadSink.create(sinkMapper, rabbitMQ),
