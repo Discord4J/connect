@@ -144,7 +144,7 @@ public class ExampleRSocketLeader {
                     log.info("Server started at {}:{}", facade.host(), facade.port());
                     log.info("*************************************************************");
                     // kill the server on JVM exit
-                    Runtime.getRuntime().addShutdownHook(new Thread(facade::disposeNow));
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> facade.disposeNow()));
                 })
                 .subscribe();
 
