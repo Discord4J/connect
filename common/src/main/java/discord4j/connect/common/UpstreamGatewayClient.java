@@ -17,6 +17,7 @@
 
 package discord4j.connect.common;
 
+import discord4j.common.close.CloseStatus;
 import discord4j.discordjson.json.gateway.Dispatch;
 import discord4j.gateway.*;
 import discord4j.gateway.json.GatewayPayload;
@@ -24,9 +25,10 @@ import discord4j.gateway.payload.PayloadReader;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.reactivestreams.Publisher;
+import reactor.core.Scannable;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
@@ -34,6 +36,7 @@ import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
 /**
@@ -83,9 +86,9 @@ public class UpstreamGatewayClient implements GatewayClient {
     }
 
     private Function<ConnectPayload, Mono<Void>> payloadProcessor() {
-        FluxSink<GatewayPayload<?>> senderSink = sender();
+        Sinks.Many<GatewayPayload<?>> senderSink = sender();
         return connectPayload -> {
-            if (senderSink.isCancelled()) {
+            if (Boolean.TRUE.equals(senderSink.scan(Scannable.Attr.CANCELLED))) {
                 return Mono.error(new IllegalStateException("Sender was cancelled"));
             }
             if (connectPayload.getShard().getIndex() != shardInfo.getIndex()) {
@@ -93,7 +96,10 @@ public class UpstreamGatewayClient implements GatewayClient {
             }
             // TODO: reduce allocations in this area
             return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(connectPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
-                    .doOnNext(senderSink::next)
+                    .doOnNext(gatewayPayload -> {
+                        while (senderSink.tryEmitNext(gatewayPayload).isFailure()) {
+                            LockSupport.parkNanos(10);
+                        }})
                     .then();
         };
     }
@@ -103,7 +109,7 @@ public class UpstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public Mono<Void> close(boolean allowResume) {
+    public Mono<CloseStatus> close(boolean allowResume) {
         return delegate.close(allowResume);
     }
 
@@ -123,7 +129,7 @@ public class UpstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public FluxSink<GatewayPayload<?>> sender() {
+    public Sinks.Many<GatewayPayload<?>> sender() {
         return delegate.sender();
     }
 

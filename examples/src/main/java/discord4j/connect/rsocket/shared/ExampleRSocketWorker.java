@@ -18,6 +18,8 @@
 package discord4j.connect.rsocket.shared;
 
 import discord4j.common.JacksonResources;
+import discord4j.common.store.Store;
+import discord4j.common.store.legacy.LegacyStoreLayout;
 import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.DownstreamGatewayClient;
@@ -57,10 +59,10 @@ public class ExampleRSocketWorker {
 
     public static void main(String[] args) {
 
-        // define the port where the global router is listening to
-        // define the port where the payload server is listening to
-        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_PORT);
-        InetSocketAddress payloadServerAddress = new InetSocketAddress(Constants.PAYLOAD_SERVER_PORT);
+        // define the host and port where the global router is listening to
+        // define the host and port where the payload server is listening to
+        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_HOST, Constants.GLOBAL_ROUTER_SERVER_PORT);
+        InetSocketAddress payloadServerAddress = new InetSocketAddress(Constants.PAYLOAD_SERVER_HOST, Constants.PAYLOAD_SERVER_PORT);
 
         // use a common jackson factory to reuse it where possible
         JacksonResources jackson = JacksonResources.create();
@@ -83,17 +85,17 @@ public class ExampleRSocketWorker {
         // RSocketPayloadSink: payloads workers send to leaders through the payload server
         // RSocketPayloadSource: payloads leaders send to workers through the payload server
         // we use DownstreamGatewayClient that is capable of using above components to work in a distributed way
-        GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
+        GatewayDiscordClient client = DiscordClient.builder(System.getenv("BOT_TOKEN"))
                 .setJacksonResources(jackson)
-                .setGlobalRateLimiter(new RSocketGlobalRateLimiter(globalRouterServerAddress))
+                .setGlobalRateLimiter(RSocketGlobalRateLimiter.createWithServerAddress(globalRouterServerAddress))
                 .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
                 .build(RSocketRouter::new)
                 .gateway()
                 .setSharding(singleStrategy)
                 .setMemberRequestFilter(MemberRequestFilter.none())
-                .setStoreService(new ReadOnlyStoreService(RedisStoreService.builder()
+                .setStore(Store.fromLayout(LegacyStoreLayout.of(new ReadOnlyStoreService(RedisStoreService.builder()
                         .redisClient(redisClient)
-                        .build()))
+                        .build()))))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(payloadServerAddress,
                                 new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound")),

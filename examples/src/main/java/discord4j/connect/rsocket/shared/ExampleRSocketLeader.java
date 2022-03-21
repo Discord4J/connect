@@ -18,6 +18,8 @@
 package discord4j.connect.rsocket.shared;
 
 import discord4j.common.JacksonResources;
+import discord4j.common.store.Store;
+import discord4j.common.store.legacy.LegacyStoreLayout;
 import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.UpstreamGatewayClient;
@@ -32,8 +34,8 @@ import discord4j.connect.rsocket.shard.RSocketShardCoordinator;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.dispatch.DispatchEventMapper;
-import discord4j.core.shard.InvalidationStrategy;
 import discord4j.core.shard.ShardingStrategy;
+import discord4j.store.jdk.JdkStoreService;
 import discord4j.store.redis.RedisStoreService;
 import io.lettuce.core.RedisClient;
 import reactor.core.publisher.Mono;
@@ -61,12 +63,12 @@ public class ExampleRSocketLeader {
 
     public static void main(String[] args) {
 
-        // define the port where the global router is listening to
-        // define the port where the shard coordinator is listening to
-        // define the port where the payload server is listening to
-        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_PORT);
-        InetSocketAddress coordinatorServerAddress = new InetSocketAddress(Constants.SHARD_COORDINATOR_SERVER_PORT);
-        InetSocketAddress payloadServerAddress = new InetSocketAddress(Constants.PAYLOAD_SERVER_PORT);
+        // define the host and port where the global router is listening to
+        // define the host and port where the shard coordinator is listening to
+        // define the host and port where the payload server is listening to
+        InetSocketAddress globalRouterServerAddress = new InetSocketAddress(Constants.GLOBAL_ROUTER_SERVER_HOST, Constants.GLOBAL_ROUTER_SERVER_PORT);
+        InetSocketAddress coordinatorServerAddress = new InetSocketAddress(Constants.SHARD_COORDINATOR_SERVER_HOST, Constants.SHARD_COORDINATOR_SERVER_PORT);
+        InetSocketAddress payloadServerAddress = new InetSocketAddress(Constants.PAYLOAD_SERVER_HOST, Constants.PAYLOAD_SERVER_PORT);
 
         // use a common jackson factory to reuse it where possible
         JacksonResources jackson = JacksonResources.create();
@@ -95,24 +97,26 @@ public class ExampleRSocketLeader {
         // RSocketPayloadSink: payloads leaders send to workers through the payload server
         // RSocketPayloadSource: payloads workers send to leaders through the payload server
         // we use UpstreamGatewayClient that is capable of using above components to work in a distributed way
-        GatewayDiscordClient client = DiscordClient.builder(System.getenv("token"))
+        GatewayDiscordClient client = DiscordClient.builder(System.getenv("BOT_TOKEN"))
                 .setJacksonResources(jackson)
-                .setGlobalRateLimiter(new RSocketGlobalRateLimiter(globalRouterServerAddress))
+                .setGlobalRateLimiter(RSocketGlobalRateLimiter.createWithServerAddress(globalRouterServerAddress))
                 .setExtraOptions(o -> new RSocketRouterOptions(o, request -> globalRouterServerAddress))
                 .build(RSocketRouter::new)
                 .gateway()
                 .setSharding(recommendedStrategy)
-                .setShardCoordinator(new RSocketShardCoordinator(coordinatorServerAddress))
+                .setShardCoordinator(RSocketShardCoordinator.createWithServerAddress(coordinatorServerAddress))
 //                .setDisabledIntents(IntentSet.of(
 //                        Intent.GUILD_PRESENCES,
 //                        Intent.GUILD_MESSAGE_TYPING,
 //                        Intent.DIRECT_MESSAGE_TYPING))
 //                .setInitialStatus(s -> Presence.invisible())
-                .setInvalidationStrategy(InvalidationStrategy.disable())
-                .setStoreService(RedisStoreService.builder()
+
+//                .setInvalidationStrategy(InvalidationStrategy.disable())
+
+                .setStore(Store.fromLayout(LegacyStoreLayout.of(RedisStoreService.builder()
                         .redisClient(redisClient)
                         .useSharedConnection(false)
-                        .build())
+                        .build())))
                 .setDispatchEventMapper(DispatchEventMapper.discardEvents())
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(payloadServerAddress,
@@ -128,13 +132,11 @@ public class ExampleRSocketLeader {
                 .port(0) // use an ephemeral port
                 .route(routes -> routes
                         .get("/logout",
-                                (req, res) -> {
-                                    return client.logout()
-                                            .then(Mono.from(res.addHeader("content-type", "application/json")
-                                                    .status(200)
-                                                    .chunkedTransfer(false)
-                                                    .sendString(Mono.just("OK"))));
-                                })
+                                (req, res) -> client.logout()
+                                        .then(Mono.from(res.addHeader("content-type", "application/json")
+                                                .status(200)
+                                                .chunkedTransfer(false)
+                                                .sendString(Mono.just("OK")))))
                 )
                 .bind()
                 .doOnNext(facade -> {

@@ -35,10 +35,12 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.util.IllegalReferenceCountException;
 import org.reactivestreams.Publisher;
+import reactor.core.Scannable;
 import reactor.core.publisher.*;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.Logger;
 import reactor.util.Loggers;
+import reactor.util.concurrent.Queues;
 import reactor.util.retry.Retry;
 
 import java.nio.charset.StandardCharsets;
@@ -46,6 +48,7 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
 /**
@@ -59,18 +62,18 @@ public class DownstreamGatewayClient implements GatewayClient {
     private static final Logger senderLog = Loggers.getLogger("discord4j.gateway.protocol.sender");
     private static final Logger receiverLog = Loggers.getLogger("discord4j.gateway.protocol.receiver");
 
-    private final EmitterProcessor<Dispatch> dispatch = EmitterProcessor.create(false);
-    private final EmitterProcessor<GatewayPayload<?>> receiver = EmitterProcessor.create(false);
-    private final EmitterProcessor<GatewayPayload<?>> sender = EmitterProcessor.create(false);
+    private final Flux<Dispatch> dispatch;
+    private final Flux<GatewayPayload<?>> receiver;
+    private final Flux<GatewayPayload<?>> sender;
 
     private final AtomicInteger lastSequence = new AtomicInteger(0);
     private final AtomicInteger shardCount = new AtomicInteger();
     private final AtomicBoolean firstPayload = new AtomicBoolean();
     private final AtomicReference<String> sessionId = new AtomicReference<>("");
 
-    private final FluxSink<Dispatch> dispatchSink;
-    private final FluxSink<GatewayPayload<?>> receiverSink;
-    private final FluxSink<GatewayPayload<?>> senderSink;
+    private final Sinks.Many<Dispatch> dispatchSink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
+    private final Sinks.Many<GatewayPayload<?>> receiverSink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
+    private final Sinks.Many<GatewayPayload<?>> senderSink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
 
     private final PayloadSink sink;
     private final PayloadSource source;
@@ -78,7 +81,7 @@ public class DownstreamGatewayClient implements GatewayClient {
     private final PayloadWriter payloadWriter;
     private final ShardInfo initialShardInfo;
     private final boolean filterByIndex;
-    private final MonoProcessor<Void> closeFuture = MonoProcessor.create();
+    private final Sinks.One<Object> closeFuture =  Sinks.one();
 
     public DownstreamGatewayClient(ConnectGatewayOptions gatewayOptions) {
         this.sink = gatewayOptions.getPayloadSink();
@@ -88,9 +91,9 @@ public class DownstreamGatewayClient implements GatewayClient {
         this.initialShardInfo = gatewayOptions.getIdentifyOptions().getShardInfo();
         this.filterByIndex = initialShardInfo.getIndex() != 0 || initialShardInfo.getCount() != 1;
         this.shardCount.set(gatewayOptions.getIdentifyOptions().getShardInfo().getCount());
-        this.dispatchSink = dispatch.sink(FluxSink.OverflowStrategy.LATEST);
-        this.receiverSink = receiver.sink(FluxSink.OverflowStrategy.LATEST);
-        this.senderSink = sender.sink(FluxSink.OverflowStrategy.LATEST);
+        this.dispatch = dispatchSink.asFlux();
+        this.receiver = receiverSink.asFlux();
+        this.sender = senderSink.asFlux();
     }
 
     @Override
@@ -99,7 +102,7 @@ public class DownstreamGatewayClient implements GatewayClient {
             // Receive from upstream -> Send to user
             Mono<Void> inboundFuture = source.receive(
                     inPayload -> {
-                        if (receiverSink.isCancelled()) {
+                        if (Boolean.TRUE.equals(receiverSink.scan(Scannable.Attr.CANCELLED))) {
                             return Mono.error(new IllegalStateException("Sender was cancelled"));
                         }
 
@@ -109,7 +112,9 @@ public class DownstreamGatewayClient implements GatewayClient {
 
                         if (firstPayload.compareAndSet(false, true)) {
                             // TODO: improve state updates for this client
-                            dispatchSink.next(GatewayStateChange.connected());
+                            while (dispatchSink.tryEmitNext(GatewayStateChange.connected()).isFailure()) {
+                                LockSupport.parkNanos(10);
+                            }
                         }
                         sessionId.set(inPayload.getSession().getId());
                         shardCount.set(inPayload.getShard().getCount());
@@ -118,7 +123,7 @@ public class DownstreamGatewayClient implements GatewayClient {
 
                         return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(inPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
                                 .map(payload -> new ShardGatewayPayload<>(payload, inPayload.getShard().getIndex()))
-                                .doOnNext(receiverSink::next)
+                                .doOnNext(gatewayPayload -> {while (receiverSink.tryEmitNext(gatewayPayload).isFailure()) {LockSupport.parkNanos(10);}})
                                 .then();
                     })
                     .then();
@@ -141,7 +146,7 @@ public class DownstreamGatewayClient implements GatewayClient {
                             .subscribeOn(Schedulers.newSingle("payload-sender"))
                             .then();
 
-            return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture)
+            return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture.asMono())
                     .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
                     .doOnCancel(() -> close(false))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(2)).maxBackoff(Duration.ofSeconds(30)))
@@ -191,10 +196,14 @@ public class DownstreamGatewayClient implements GatewayClient {
             if (payload.getData() != null) {
                 if (payload instanceof ShardGatewayPayload) {
                     ShardGatewayPayload<?> shardPayload = (ShardGatewayPayload<?>) payload;
-                    dispatchSink.next(new ShardAwareDispatch(shardPayload.getShardIndex(), getShardCount(),
-                            (Dispatch) payload.getData()));
+                    while (dispatchSink.tryEmitNext(new ShardAwareDispatch(shardPayload.getShardIndex(), getShardCount(),
+                            (Dispatch) payload.getData())).isFailure()) {
+                        LockSupport.parkNanos(10);
+                    }
                 } else {
-                    dispatchSink.next((Dispatch) payload.getData());
+                    while (dispatchSink.tryEmitNext((Dispatch) payload.getData()).isFailure()) {
+                        LockSupport.parkNanos(10);
+                    }
                 }
             }
         }
@@ -223,12 +232,14 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public Mono<Void> close(boolean allowResume) {
+    public Mono<CloseStatus> close(boolean allowResume) {
         return Mono.fromRunnable(() -> {
-            dispatchSink.next(GatewayStateChange.disconnected(DisconnectBehavior.stop(null),
-                    allowResume ? CloseStatus.ABNORMAL_CLOSE : CloseStatus.NORMAL_CLOSE));
-            senderSink.complete();
-            closeFuture.onComplete();
+            while (dispatchSink.tryEmitNext(GatewayStateChange.disconnected(DisconnectBehavior.stop(null),
+                    allowResume ? CloseStatus.ABNORMAL_CLOSE : CloseStatus.NORMAL_CLOSE)).isFailure()) {
+                LockSupport.parkNanos(10);
+            }
+            senderSink.tryEmitComplete();
+            closeFuture.tryEmitEmpty();
         });
     }
 
@@ -249,13 +260,15 @@ public class DownstreamGatewayClient implements GatewayClient {
     }
 
     @Override
-    public FluxSink<GatewayPayload<?>> sender() {
+    public Sinks.Many<GatewayPayload<?>> sender() {
         return senderSink;
     }
 
     @Override
     public Mono<Void> sendBuffer(Publisher<ByteBuf> publisher) {
-        return Flux.from(publisher).flatMap(payloadReader::read).doOnNext(senderSink::next).then();
+        return Flux.from(publisher).flatMap(payloadReader::read).doOnNext(gatewayPayload -> { while (senderSink.tryEmitNext(gatewayPayload).isFailure()) {
+            LockSupport.parkNanos(10);
+        }}).then();
     }
 
     @Override
