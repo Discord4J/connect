@@ -2,6 +2,5 @@ dependencies {
     api project(':common')
     api "io.projectreactor.rabbitmq:reactor-rabbitmq:$rabbitmq_version"
 
-    implementation "com.rabbitmq:amqp-client:$amqp_version"
     implementation "com.discord4j:discord4j-core:$discord4j_core_version"
 }
