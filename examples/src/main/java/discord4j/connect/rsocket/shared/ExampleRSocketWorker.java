@@ -30,6 +30,9 @@ import discord4j.connect.rsocket.gateway.RSocketPayloadSource;
 import discord4j.connect.rsocket.global.RSocketGlobalRateLimiter;
 import discord4j.connect.rsocket.router.RSocketRouter;
 import discord4j.connect.rsocket.router.RSocketRouterOptions;
+import discord4j.connect.support.BotSupport;
+import discord4j.connect.support.ExtraBotSupport;
+import discord4j.connect.support.LogoutHttpServer;
 import discord4j.connect.support.NoBotSupport;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
@@ -38,6 +41,7 @@ import discord4j.core.shard.ShardingStrategy;
 import discord4j.store.api.readonly.ReadOnlyStoreService;
 import discord4j.store.redis.RedisStoreService;
 import io.lettuce.core.RedisClient;
+import reactor.core.publisher.Mono;
 
 import java.net.InetSocketAddress;
 
@@ -105,8 +109,16 @@ public class ExampleRSocketWorker {
                 .blockOptional()
                 .orElseThrow(RuntimeException::new);
 
-        NoBotSupport.create(client)
-                .eventHandlers()
-                .block();
+        LogoutHttpServer.startAsync(client);
+        if (Boolean.parseBoolean(System.getenv("EXAMPLE_COMMANDS"))) {
+            Mono.when(
+                    BotSupport.create(client).eventHandlers(),
+                    ExtraBotSupport.create(client).eventHandlers()
+            ).block();
+        } else {
+            NoBotSupport.create(client)
+                    .eventHandlers()
+                    .block();
+        }
     }
 }

@@ -22,7 +22,6 @@ import discord4j.connect.rsocket.router.RequestBridge;
 import discord4j.connect.rsocket.router.RequestBridgeStream;
 import discord4j.rest.request.GlobalRateLimiter;
 import discord4j.rest.request.RequestQueueFactory;
-import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import io.rsocket.core.RSocketServer;
@@ -82,7 +81,7 @@ public class RSocketGlobalRouterServer {
     }
 
     private RSocket leaderAcceptor() {
-        return new AbstractRSocket() {
+        return new RSocket() {
 
             @Override
             public Flux<Payload> requestChannel(Publisher<Payload> payloads) {

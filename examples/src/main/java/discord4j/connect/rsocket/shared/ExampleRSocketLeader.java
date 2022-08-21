@@ -31,15 +31,13 @@ import discord4j.connect.rsocket.global.RSocketGlobalRateLimiter;
 import discord4j.connect.rsocket.router.RSocketRouter;
 import discord4j.connect.rsocket.router.RSocketRouterOptions;
 import discord4j.connect.rsocket.shard.RSocketShardCoordinator;
+import discord4j.connect.support.LogoutHttpServer;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
 import discord4j.core.event.dispatch.DispatchEventMapper;
 import discord4j.core.shard.ShardingStrategy;
-import discord4j.store.jdk.JdkStoreService;
 import discord4j.store.redis.RedisStoreService;
 import io.lettuce.core.RedisClient;
-import reactor.core.publisher.Mono;
-import reactor.netty.http.server.HttpServer;
 import reactor.util.Logger;
 import reactor.util.Loggers;
 
@@ -128,25 +126,7 @@ public class ExampleRSocketLeader {
                 .orElseThrow(RuntimeException::new);
 
         // Proof of concept allowing leader management via API
-        HttpServer.create()
-                .port(0) // use an ephemeral port
-                .route(routes -> routes
-                        .get("/logout",
-                                (req, res) -> client.logout()
-                                        .then(Mono.from(res.addHeader("content-type", "application/json")
-                                                .status(200)
-                                                .chunkedTransfer(false)
-                                                .sendString(Mono.just("OK")))))
-                )
-                .bind()
-                .doOnNext(facade -> {
-                    log.info("*************************************************************");
-                    log.info("Server started at {}:{}", facade.host(), facade.port());
-                    log.info("*************************************************************");
-                    // kill the server on JVM exit
-                    Runtime.getRuntime().addShutdownHook(new Thread(() -> facade.disposeNow()));
-                })
-                .subscribe();
+        LogoutHttpServer.startAsync(client);
 
         client.onDisconnect().block();
     }

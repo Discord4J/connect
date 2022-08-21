@@ -1,6 +1,5 @@
 package discord4j.connect.rsocket.gateway;
 
-import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
 import io.rsocket.RSocket;
 import io.rsocket.core.RSocketServer;
@@ -60,7 +59,7 @@ public class RSocketPayloadServer {
     }
 
     private RSocket leaderAcceptor(RSocket sendingSocket) {
-        return new AbstractRSocket() {
+        return new RSocket() {
 
             @Override
             public Flux<Payload> requestChannel(Publisher<Payload> payloads) {

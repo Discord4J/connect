@@ -18,8 +18,8 @@
 package discord4j.connect.rsocket.shard;
 
 import discord4j.common.operator.RateLimitOperator;
-import io.rsocket.AbstractRSocket;
 import io.rsocket.Payload;
+import io.rsocket.RSocket;
 import io.rsocket.core.RSocketServer;
 import io.rsocket.transport.netty.server.CloseableChannel;
 import io.rsocket.transport.netty.server.TcpServerTransport;
@@ -53,8 +53,8 @@ public class RSocketShardCoordinatorServer {
                 .bind(serverTransport);
     }
 
-    private AbstractRSocket socketAcceptor(Map<String, RateLimitOperator<Payload>> limiters) {
-        return new AbstractRSocket() {
+    private RSocket socketAcceptor(Map<String, RateLimitOperator<Payload>> limiters) {
+        return new RSocket() {
 
             @Override
             public Mono<Payload> requestResponse(Payload payload) {
