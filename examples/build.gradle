@@ -2,7 +2,6 @@ dependencies {
     api project(':rsocket')
     api project(':rabbitmq')
 
-    implementation "com.rabbitmq:amqp-client:$amqp_version"
     implementation "ch.qos.logback:logback-classic:$logback_version"
     implementation "com.discord4j:discord4j-core:$discord4j_core_version"
     implementation "com.discord4j:stores-redis:$stores_redis_version"
