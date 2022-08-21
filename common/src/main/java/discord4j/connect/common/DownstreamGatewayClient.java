@@ -123,7 +123,11 @@ public class DownstreamGatewayClient implements GatewayClient {
 
                         return Flux.from(payloadReader.read(Unpooled.wrappedBuffer(inPayload.getPayload().getBytes(StandardCharsets.UTF_8))))
                                 .map(payload -> new ShardGatewayPayload<>(payload, inPayload.getShard().getIndex()))
-                                .doOnNext(gatewayPayload -> {while (receiverSink.tryEmitNext(gatewayPayload).isFailure()) {LockSupport.parkNanos(10);}})
+                                .doOnNext(gatewayPayload -> {
+                                    while (receiverSink.tryEmitNext(gatewayPayload).isFailure()) {
+                                        LockSupport.parkNanos(10);
+                                    }
+                                })
                                 .then();
                     })
                     .then();
@@ -148,7 +152,7 @@ public class DownstreamGatewayClient implements GatewayClient {
 
             return Mono.zip(inboundFuture, receiverFuture, senderFuture, closeFuture.asMono())
                     .doOnError(t -> log.error("Gateway client error: {}", t.toString()))
-                    .doOnCancel(() -> close(false))
+                    .doOnCancel(() -> closeNow(false))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(2)).maxBackoff(Duration.ofSeconds(30)))
                     .then();
         });
@@ -233,14 +237,16 @@ public class DownstreamGatewayClient implements GatewayClient {
 
     @Override
     public Mono<CloseStatus> close(boolean allowResume) {
-        return Mono.fromRunnable(() -> {
-            while (dispatchSink.tryEmitNext(GatewayStateChange.disconnected(DisconnectBehavior.stop(null),
-                    allowResume ? CloseStatus.ABNORMAL_CLOSE : CloseStatus.NORMAL_CLOSE)).isFailure()) {
-                LockSupport.parkNanos(10);
-            }
-            senderSink.tryEmitComplete();
-            closeFuture.tryEmitEmpty();
-        });
+        return Mono.fromRunnable(() -> closeNow(allowResume));
+    }
+
+    private void closeNow(boolean allowResume) {
+        while (dispatchSink.tryEmitNext(GatewayStateChange.disconnected(DisconnectBehavior.stop(null),
+                allowResume ? CloseStatus.ABNORMAL_CLOSE : CloseStatus.NORMAL_CLOSE)).isFailure()) {
+            LockSupport.parkNanos(10);
+        }
+        senderSink.tryEmitComplete();
+        closeFuture.tryEmitEmpty();
     }
 
     @Override
