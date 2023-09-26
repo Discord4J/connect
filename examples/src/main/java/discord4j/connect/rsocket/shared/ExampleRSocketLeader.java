@@ -22,6 +22,7 @@ import discord4j.common.store.Store;
 import discord4j.common.store.legacy.LegacyStoreLayout;
 import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
+import discord4j.connect.common.PayloadDestinationMapper;
 import discord4j.connect.common.UpstreamGatewayClient;
 import discord4j.connect.rsocket.gateway.RSocketJacksonSinkMapper;
 import discord4j.connect.rsocket.gateway.RSocketJacksonSourceMapper;
@@ -86,6 +87,7 @@ public class ExampleRSocketLeader {
                 .indices(0, 2) // only connect this leader to shard IDs 0 and 2
                 .count(4)      // but still split our bot guilds into 4 shards
                 .build();
+        PayloadDestinationMapper<String> payloadDestinationMapper = PayloadDestinationMapper.fixed("inbound");
 
         // define the GlobalRouterServer as GRL for all nodes in this architecture
         // define the GlobalRouterServer as Router for all request buckets in this architecture
@@ -118,7 +120,7 @@ public class ExampleRSocketLeader {
                 .setDispatchEventMapper(DispatchEventMapper.discardEvents())
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(payloadServerAddress,
-                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "inbound")),
+                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), payloadDestinationMapper)),
                         new RSocketPayloadSource(payloadServerAddress, "outbound",
                                 new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
                 .login(UpstreamGatewayClient::new)

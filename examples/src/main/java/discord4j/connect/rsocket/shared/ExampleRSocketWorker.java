@@ -23,6 +23,7 @@ import discord4j.common.store.legacy.LegacyStoreLayout;
 import discord4j.connect.Constants;
 import discord4j.connect.common.ConnectGatewayOptions;
 import discord4j.connect.common.DownstreamGatewayClient;
+import discord4j.connect.common.PayloadDestinationMapper;
 import discord4j.connect.rsocket.gateway.RSocketJacksonSinkMapper;
 import discord4j.connect.rsocket.gateway.RSocketJacksonSourceMapper;
 import discord4j.connect.rsocket.gateway.RSocketPayloadSink;
@@ -102,7 +103,7 @@ public class ExampleRSocketWorker {
                         .build()))))
                 .setExtraOptions(o -> new ConnectGatewayOptions(o,
                         new RSocketPayloadSink(payloadServerAddress,
-                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), "outbound")),
+                                new RSocketJacksonSinkMapper(jackson.getObjectMapper(), PayloadDestinationMapper.fixed("outbound"))),
                         new RSocketPayloadSource(payloadServerAddress, "inbound",
                                 new RSocketJacksonSourceMapper(jackson.getObjectMapper()))))
                 .login(DownstreamGatewayClient::new)
